@@ -1,8 +1,9 @@
 # Concept
 
 **Planetary** redraws NASA's [Planetary Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/)
-as a set of engineering drawings: one sheet per body, plus a general arrangement. Every number that has
-a shape is drawn; the rest are listed exactly as NASA gives them.
+as a set of engineering drawings: a schematic of the solar system, and one sheet for each of the ten
+bodies in NASA's table. Every number that has a shape is drawn; the rest are listed exactly as NASA
+gives them.
 
 This file records the decisions behind the design, so that later changes can be checked against them.
 
@@ -20,32 +21,36 @@ are listed in [data/discrepancies.md](../data/discrepancies.md).
 
 ## Sheets
 
-The set has 11 sheets: sheet 1 is the general arrangement, sheets 2–11 are the bodies in NASA's order
-(Mercury, Venus, Earth, Moon, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto).
+The set has 11 sheets: sheet 1 is the home page, sheets 2–11 are the bodies in NASA's order (Mercury,
+Venus, Earth, Moon, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto).
 
-**Sheet 1, general arrangement.** NASA's main table, with the ten bodies drawn as its column heads: one
-true scale, each at its real obliquity, each spinning at 1 s = 1 h. Pointing at a row lights up what it
-measures in every drawing. Below it, a plan of the orbits at true scale with the positions at the epoch,
-and detail A for the inner system.
+**Sheet 1, the home page.** A schematic of the solar system and nothing else: the orbits, the Sun and
+the planets moving at 1 minute = 1 year from today's positions. Pointing at a planet shows its name and
+holds the clock; clicking it opens its sheet. The Moon is the ring round the Earth. It is not to scale
+and says so: distances from the Sun are compressed (r → R·(r / 7375.9)^0.4) and the planets are symbols
+(Ø ∝ √ NASA's diameter, at least 6 px), while directions, inclinations and poles of rotation stay true.
+Four corner items: the name, "?", the not-to-scale note, and the date with Pause.
 
-**Sheets 2–11, one body each.**
+**Sheets 2–11, one body each.** A header with the planet tabs and "?"; under it the drawings and NASA's
+table.
 
 - View A: the body. Outline at the 1-bar level for the giants, a 30° graticule (visible half only), the
-  rotation axis drawn to the positive pole with an N tick, the orbit normal, the obliquity, the spin arrow,
-  the equatorial diameter, the polar semi-axis where flattening is visible, the rings from NASA's ring
-  sheets, the core where NASA gives one (Earth, Mars). Turntable: drag sideways to turn it.
-- Key plan: the orbit, seen normal to its plane, with the Sun at the focus, perihelion and aphelion
-  dimensioned, Earth's orbit as a phantom line and the body's position at the epoch. Pointing at the
-  inclination turns the plan edge-on along the line of nodes, where the angle is true size.
-- Schedule: NASA's 20 main-table rows for this body, in NASA's order, with NASA's ratio to Earth. Rows
-  that have a shape carry a dimension mark and light up their geometry; the drawing lights up its row.
-- Notes: NASA's definition of the row in focus, verbatim. By default, the sheet's footnotes.
-- Title block: sheet, source pages with NASA's own "Last Updated" dates, retrieval date, epoch, spin
-  time scale, "Unofficial — not a NASA product".
+  rotation axis drawn to the positive pole, the orbit normal, the obliquity, the spin arrow, the
+  equatorial diameter, and the rings from NASA's ring sheets. Turntable: drag sideways to turn it.
+- Key plan: the orbit, seen normal to its plane, with the Sun at the focus, Earth's orbit as a phantom
+  line and the body's position at the epoch.
+- Table: NASA's 20 main-table rows for this body, in NASA's order, values verbatim. Rows that have a
+  shape carry a dimension mark and light up their geometry; the drawing lights up its row.
+- Row popover: NASA's definition, verbatim; the ratio to Earth; the values the drawing takes from the
+  body's own page (polar radius and core with the diameter, the dipole with the magnetic field, ring
+  edges with the rings); and the places where NASA's pages disagree about this row.
+- "?" dialog: the general notes in drafting voice, the source pages with NASA's own "Last Updated"
+  dates, the retrieval date, the title block, and the unofficial notice.
 
-Some details only appear when asked for: the magnetic dipole axis when pointing at "Global Magnetic
-Field?", ring names and radii when pointing at "Ring System?", equal-time ticks on the orbit when
-pointing at the orbital period.
+Details appear with their row: the polar semi-axis and the core with the diameter, the dipole with
+"Global Magnetic Field?", ring radii with "Ring System?", the apsides and their dimensions with
+perihelion, aphelion, distance and eccentricity, the edge view with the inclination, and equal-time
+ticks with the orbital period.
 
 ## What is drawn from where
 
@@ -84,14 +89,18 @@ within 0.5° from 1990 to 2060 (0.3° for every body except Mercury); the sheets
 
 Units toggle, date picker, view buttons, tours, intro animations, sound, photos, starfield, a back
 graticule, Earth phantoms on every sheet, section views, NASA's group labels ("gas giants"), and any
-"dwarf planet" or "ice giant" vocabulary that is not on NASA's pages.
+"dwarf planet" or "ice giant" vocabulary that is not on NASA's pages. Content that changes on hover,
+panels that open by pushing the page down, and a comparison table on the home page.
 
 ## Interaction
 
-Drag sideways on view A to turn it, double-click to reset. Point at (or tap, or tab to) a row or a
-drawn feature to light it up and read NASA's definition. ← → move between sheets. A pause button stops
-the spin; reduced-motion settings stop it too. Deep links such as `/saturn/#obliquity` open a sheet with
-that row in focus.
+Content changes only on a click, a tap, Enter or Space; hovering changes nothing but the cursor. A row
+or a drawn line selects its parameter: the geometry turns yellow and NASA's definition opens in a
+popover beside the row (a sheet at the bottom of a phone held upright). It closes with ×, Esc, a second
+click or a click on blank paper. Nothing that opens pushes the layout. Drag sideways on view A to turn
+it, double-click to reset. The tabs and ← → move between bodies and keep the selected row. A pause
+button stops the motion; reduced-motion settings start paused. Deep links such as `/saturn/#obliquity`
+open a sheet with that row selected.
 
 ## Build
 
