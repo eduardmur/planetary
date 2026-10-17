@@ -71,7 +71,11 @@ let paused = reducedMotion();
 const setPaused = (p: boolean) => {
   paused = p;
   for (const s of spinners) s.setPaused(p);
-  if (pause) pause.textContent = p ? 'Play' : 'Pause';
+  if (pause) {
+    // The text stays for screen readers; narrow layouts may draw it as an icon from data-paused.
+    pause.textContent = p ? 'Play' : 'Pause';
+    pause.dataset.paused = String(p);
+  }
 };
 setPaused(paused);
 pause?.addEventListener('click', () => setPaused(!paused));
