@@ -79,25 +79,12 @@ a:hover {
 
 /* ---- Frame ---------------------------------------------------------------------------------- */
 
-/* Desktop: the drawings stay in view on the left while the schedule, notes and title block run
-   down the right. */
+/* The drawing frame: a border with a paper margin round it, at least the height of the window. */
 .sheet {
   position: relative;
   margin: var(--gap);
   min-height: calc(var(--vh) - 2 * var(--gap));
   border: var(--w-frame) solid var(--ink);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(380px, 0.6fr);
-  grid-template-rows: auto 1fr auto;
-  grid-template-areas:
-    'views schedule'
-    'views notes'
-    'views title';
-}
-.sheet > .schedule,
-.sheet > .notes,
-.sheet > .title-block {
-  border-left: var(--w-narrow) solid var(--ink-3);
 }
 
 /* Centring marks on the four sides of the frame (ISO 5457). */
@@ -148,463 +135,142 @@ a:hover {
   color: var(--ink-2);
 }
 
-/* ---- Views ---------------------------------------------------------------------------------- */
+/* ---- The "?" button and its dialog ------------------------------------------------------------ */
 
-.views {
-  grid-area: views;
-  position: sticky;
-  top: 0;
-  align-self: start;
-  height: max(560px, calc(var(--vh) - 2 * var(--gap) - 2 * var(--w-frame)));
-}
-.view {
-  margin: 0;
-  position: absolute;
-}
-.view-a {
-  inset: 0;
-}
-.view-a svg {
-  position: absolute;
-  inset: 0 0 34px 0;
-  width: 100%;
-  height: calc(100% - 34px);
-}
-.key-plan {
-  right: 0;
-  bottom: 0;
-  width: min(36%, 340px);
-  height: min(40%, 330px);
-  border-left: var(--w-narrow) solid var(--ink-3);
-  border-top: var(--w-narrow) solid var(--ink-3);
-  background: var(--paper);
-}
-.key-plan svg {
-  position: absolute;
-  inset: 0 0 28px 0;
-  width: 100%;
-  height: calc(100% - 28px);
-}
-.view figcaption {
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 8px;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-  pointer-events: none;
-}
-.view figcaption .letter {
-  font-size: 18px;
-  font-weight: 500;
+button.info {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font: 500 14px/1 var(--font);
   color: var(--ink);
-  letter-spacing: 0;
-  border-bottom: var(--w-narrow) solid var(--ink);
-  line-height: 1;
-}
-.view-a .hint {
-  color: var(--ink-3-text);
-}
-.view figcaption button {
-  pointer-events: auto;
-  flex: none;
-  white-space: nowrap;
-  margin-left: auto;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: uppercase;
-  color: var(--ink-2);
   background: var(--paper);
   border: var(--w-narrow) solid var(--ink-3);
-  padding: 2px 8px;
+  border-radius: 50%;
   cursor: pointer;
 }
-.view figcaption button:hover {
-  color: var(--hot);
-  border-color: var(--hot);
-}
-@media (min-width: 861px) {
-  .view figcaption .swap {
-    display: none;
+@media (hover: hover) {
+  button.info:hover {
+    border-color: var(--ink);
   }
 }
-
-/* ---- Schedule ------------------------------------------------------------------------------- */
-
-.schedule {
-  grid-area: schedule;
-  padding: 10px 14px 8px;
+.info-dialog {
+  width: min(560px, 100vw - 48px);
+  max-height: 80vh;
+  padding: 0;
+  color: var(--ink);
+  background: var(--paper);
+  border: var(--w-frame) solid var(--ink);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
-.schedule h2,
-.notes h2 {
-  margin: 0 0 6px;
+.info-dialog::backdrop {
+  background: rgba(13, 30, 58, 0.6);
 }
-.schedule table {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
+.info-dialog header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 8px 6px 16px;
+  background: var(--paper);
+  border-bottom: var(--w-narrow) solid var(--ink-3);
 }
-.schedule th,
-.schedule td {
-  padding: 1.5px 6px;
-  border-bottom: var(--w-narrow) solid var(--ink-4);
-  text-align: right;
-  font-weight: 400;
-  white-space: nowrap;
-  font-size: 13.5px;
-  line-height: 1.3;
-}
-.schedule thead th:first-child {
-  text-align: left;
-}
-.schedule thead th {
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  color: var(--ink-3-text);
-  border-bottom-color: var(--ink-3);
-  font-weight: 500;
-}
-.schedule tbody th {
-  text-align: left;
-  font-weight: 400;
-  white-space: normal;
-}
-.schedule td.ratio,
-.schedule .unit {
-  color: var(--ink-3-text);
-}
-.schedule .fn,
-.ga-table .fn {
-  font-size: 0.8em;
-  vertical-align: super;
-  line-height: 0;
-  margin-left: 1px;
-}
-
-/* Rows: every row shows NASA's definition; a row marked ⊢⊣ is also drawn. The row in focus (pointed
-   at, tapped or tabbed to) is yellow; keyboard focus adds a dashed outline of its own. */
-tbody tr[data-key] {
-  cursor: pointer;
-}
-tbody tr[data-key].hot {
-  background: var(--hot-wash);
-  color: var(--hot);
-}
-tbody tr[data-key].hot .unit,
-tbody tr[data-key].hot td.ratio {
-  color: inherit;
-}
-tbody tr[data-key]:focus-visible {
-  outline: 1.5px dashed var(--hot);
-  outline-offset: -2px;
-}
-.schedule tbody tr[data-shape] th::after,
-.ga-table tbody tr[data-shape] th::after {
-  /* A dimension mark: this row is drawn. */
-  content: '';
-  display: inline-block;
-  width: 14px;
-  height: 7px;
-  margin-left: 6px;
-  vertical-align: 1px;
-  background:
-    linear-gradient(currentColor, currentColor) center / 100% 1px no-repeat,
-    linear-gradient(currentColor, currentColor) left / 1px 100% no-repeat,
-    linear-gradient(currentColor, currentColor) right / 1px 100% no-repeat;
-  opacity: 0.55;
-}
-tbody tr[data-shape].hot th::after {
-  opacity: 1;
-}
-
-/* Values the drawings take from the body's own fact sheet. */
-.schedule .drawn {
-  margin-top: 12px;
-}
-.drawn caption {
-  caption-side: top;
-  text-align: left;
-  margin: 0 0 4px;
-}
-.drawn tbody th {
-  vertical-align: top;
-}
-
-/* NASA's definition of the row in focus. It keeps its place (and its live region) when idle. */
-.definition {
-  margin: 10px 0 0;
-  padding: 7px 0 2px;
-  border-top: var(--w-narrow) solid var(--ink-3);
-  min-height: 7.4em;
-  font-size: 13px;
-  line-height: 1.4;
-}
-.definition p {
+.info-dialog h2 {
   margin: 0;
-}
-.definition .term {
-  margin-bottom: 3px;
-  color: var(--hot);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.definition .term .si {
-  text-transform: none;
-  letter-spacing: 0.04em;
+.info-dialog h2:focus {
+  outline: none;
 }
-.definition .text {
-  max-width: 68ch;
-  margin-bottom: 4px;
+.info-dialog .close {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font: 400 20px/1 var(--font);
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
 }
-.definition .src,
-.definition .idle {
-  font-size: 11.5px;
-  color: var(--ink-3-text);
-}
-.definition:not(.defining) :is(.term, .text, .src),
-.definition.defining .idle {
-  display: none;
-}
-.definition .touch {
-  display: none;
-}
-@media (hover: none) {
-  .definition .touch {
-    display: inline;
-  }
-  .definition .pointer {
-    display: none;
-  }
-}
-
-.schedule .more {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 10px 0 0;
-  font-size: 12px;
-  color: var(--ink-3-text);
-}
-
-/* ---- Notes ---------------------------------------------------------------------------------- */
-
-.notes {
-  grid-area: notes;
-  padding: 10px 14px 14px;
+.info-body {
+  padding: 12px 16px 18px;
   font-size: 13px;
-}
-.notes ol {
-  margin: 0;
-  padding-left: 1.8em;
-  max-width: 80ch;
-  font-size: 11px;
   line-height: 1.45;
+}
+.info-body h3 {
+  margin: 16px 0 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.info-body p {
+  margin: 0 0 8px;
+}
+.info-body ol,
+.info-body ul {
+  margin: 0 0 8px;
+  padding-left: 1.6em;
+}
+.info-body ol.drafting {
+  font-size: 11px;
   letter-spacing: 0.05em;
   color: var(--ink-2);
 }
-.notes li {
-  margin: 0 0 3px;
+.info-body li {
+  margin: 0 0 4px;
+}
+html:has(dialog[open]) {
+  overflow: hidden;
+}
+@media (max-width: 860px) {
+  .info-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+  }
+  .info-body {
+    font-size: 14px;
+  }
+}
+@media (pointer: coarse) {
+  .info-dialog .close {
+    width: 44px;
+    height: 44px;
+  }
 }
 
-/* ---- Title block (ISO 7200 in spirit) ------------------------------------------------------- */
-
-/* The cell rules are the 1 px gaps between the cells, showing the block's background. */
-.title-block {
-  grid-area: title;
-  border-top: var(--w-narrow) solid var(--ink-3);
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 1px;
-  background: var(--ink-4);
-  font-size: 11px;
-  letter-spacing: 0.06em;
+/* Without JavaScript the dialog's content is shown after the sheet, and the controls that need
+   scripts are hidden. */
+html:not(.js) button.info,
+html:not(.js) #pause {
+  display: none;
 }
-.title-block > div {
-  padding: 5px 10px 6px;
-  min-width: 0;
-  background: var(--paper);
-}
-.title-block .k {
+html:not(.js) .info-dialog {
   display: block;
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
-  color: var(--ink-3-text);
-  text-transform: uppercase;
-}
-.title-block .v {
-  display: block;
-  text-transform: uppercase;
-}
-.title-block .si {
-  text-transform: none;
-}
-.title-block .name {
-  grid-row: span 2;
-}
-.title-block .name svg {
-  display: block;
-  max-width: 100%;
+  position: static;
+  width: auto;
+  max-width: none;
+  max-height: none;
   height: auto;
-  margin-top: 4px;
-  overflow: visible;
+  margin: 0 var(--gap) var(--gap);
 }
-.title-block .wide {
-  grid-column: 1 / -1;
+html:not(.js) .info-dialog .close {
+  display: none;
 }
-.title-block .nav {
-  display: flex;
-  gap: 4px 14px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.title-block .nav > * {
-  white-space: nowrap;
-}
-.title-block button {
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: uppercase;
-  color: var(--ink);
-  background: none;
-  border: var(--w-narrow) solid var(--ink-3);
-  padding: 2px 8px;
-  cursor: pointer;
-}
-.title-block button:hover {
-  color: var(--hot);
-  border-color: var(--hot);
-}
-.title-block .status {
-  color: var(--ink-2);
-}
-
-/* ---- General arrangement -------------------------------------------------------------------- */
-
-.sheet-ga {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.55fr) minmax(320px, 0.6fr);
-  grid-template-rows: auto 1fr auto;
-  grid-template-areas:
-    'table table table'
-    'plan detail notes'
-    'plan detail title';
-}
-.sheet-ga > .notes,
-.sheet-ga > .title-block {
-  border-left: 0;
-}
-.ga-table {
-  grid-area: table;
-  overflow-x: auto;
-  border-bottom: var(--w-narrow) solid var(--ink-3);
-  padding: 8px 14px 10px;
-}
-.ga-table table {
-  width: 100%;
-  min-width: 980px;
-  /* Separate borders: each cell paints its own rule, so the sticky column keeps its rules. */
-  border-collapse: separate;
-  border-spacing: 0;
-  font-variant-numeric: tabular-nums;
-  table-layout: fixed;
-}
-.ga-table col.param {
-  width: 210px;
-}
-.ga-table th,
-.ga-table td {
-  padding: 2px 6px;
-  border-bottom: var(--w-narrow) solid var(--ink-4);
-  text-align: center;
-  font-weight: 400;
-  white-space: nowrap;
-  font-size: 13.5px;
-}
-/* The parameter column stays put when the table scrolls sideways; -14px covers the padding. */
-.ga-table tbody th,
-.ga-table thead th:first-child {
-  position: sticky;
-  left: -14px;
-  z-index: 2;
-  background: var(--paper);
-  text-align: left;
-  white-space: normal;
-}
-.ga-table tbody tr.hot th {
-  background: var(--hot-wash-solid);
-}
-.ga-table thead th {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  font-weight: 500;
-  border-bottom-color: var(--ink-3);
-}
-.ga-table thead a {
-  text-decoration: none;
-}
-.ga-table thead a small {
-  display: block;
-  font-size: 9.5px;
-  color: var(--ink-3-text);
-  letter-spacing: 0.1em;
-}
-.ga-table .unit {
-  color: var(--ink-3-text);
-}
-.ga-table .lineup-row th {
-  vertical-align: top;
-  padding-top: 6px;
-  border: 0;
-}
-.ga-table .lineup-row td {
-  padding: 0;
-  border: 0;
-  height: clamp(110px, 10vw, 150px);
-  position: relative;
-}
-.ga-table .lineup-row svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-.ga-table .definition {
-  min-height: 5.8em;
-}
-.ga-table .definition .text {
-  max-width: 120ch;
-}
-.ga-plan,
-.ga-detail {
-  position: relative;
-  min-height: 420px;
-  border-right: var(--w-narrow) solid var(--ink-3);
-}
-.ga-plan {
-  grid-area: plan;
-}
-.ga-detail {
-  grid-area: detail;
-}
-.ga-plan .view,
-.ga-detail .view {
-  inset: 0;
-}
-.ga-plan svg,
-.ga-detail svg {
-  position: absolute;
-  inset: 0 0 30px 0;
-  width: 100%;
-  height: calc(100% - 30px);
-}
-
-/* ---- Phones and narrow windows: one drawing at a time ---------------------------------------- */
 
 @media (max-width: 860px) {
   :root {
@@ -618,132 +284,8 @@ tbody tr[data-shape].hot th::after {
   .marks {
     display: none;
   }
-  /* The key plan takes the whole drawing area while an orbit row is in focus. */
-  .key-plan {
-    display: none;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-  }
-  .views.show-plan .key-plan {
-    display: block;
-  }
-  .views.show-plan .view-a {
-    display: none;
-  }
-  .view-a .hint {
-    display: none;
-  }
-  .label,
-  .view figcaption,
-  .notes ol,
-  .schedule .more,
-  .definition .src,
-  .definition .idle {
+  .label {
     font-size: 12px;
-  }
-  .definition .term,
-  .schedule thead th,
-  .title-block .k,
-  .ga-table thead a small {
-    font-size: 11px;
-  }
-  .title-block {
-    font-size: 12px;
-    grid-template-columns: 1fr 1fr;
-  }
-  .schedule th,
-  .schedule td {
-    padding: 4px 4px;
-  }
-  /* The definition opens under the row that was tapped. */
-  tr.def-row td {
-    padding: 6px 4px 10px;
-    text-align: left;
-    white-space: normal;
-    border-bottom: var(--w-narrow) solid var(--ink-3);
-  }
-  tr.def-row .definition {
-    margin: 0;
-    padding: 0;
-    border: 0;
-    min-height: 0;
-  }
-  .ga-table col.param {
-    width: 140px;
-  }
-  .ga-table tr.def-row .definition {
-    position: sticky;
-    left: 0;
-    width: calc(100vw - 64px);
-  }
-}
-
-/* Portrait: the drawing sticks to the top and the schedule scrolls under it. */
-@media (max-width: 860px) and (orientation: portrait) {
-  html:has(.views) {
-    scroll-padding-top: calc(min(52svh, 520px) + 8px);
-  }
-  .sheet {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto 1fr auto;
-    grid-template-areas: 'views' 'schedule' 'notes' 'title';
-  }
-  .sheet > .schedule,
-  .sheet > .notes,
-  .sheet > .title-block {
-    border-left: 0;
-  }
-  .views {
-    z-index: 3;
-    height: min(52svh, 520px);
-    background: var(--paper);
-    border-bottom: var(--w-narrow) solid var(--ink-3);
-  }
-  .sheet-ga {
-    grid-template-rows: auto;
-    grid-template-areas: 'table' 'plan' 'detail' 'notes' 'title';
-  }
-  .ga-plan,
-  .ga-detail {
-    min-height: min(92vw, 72svh);
-    border-right: 0;
-    border-bottom: var(--w-narrow) solid var(--ink-3);
-  }
-}
-
-/* Landscape: the drawing on the left at full height, the schedule on the right. */
-@media (max-width: 860px) and (orientation: landscape) {
-  .sheet {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  }
-  .views {
-    height: calc(var(--vh) - 2 * var(--gap) - 2 * var(--w-frame));
-  }
-  .sheet-ga {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto;
-    grid-template-areas: 'table table' 'plan detail' 'notes notes' 'title title';
-  }
-  .ga-plan,
-  .ga-detail {
-    min-height: calc(var(--vh) - 2 * var(--gap));
-    border-bottom: var(--w-narrow) solid var(--ink-3);
-  }
-  .ga-detail {
-    border-right: 0;
-  }
-}
-
-/* Fingers: rows at least 26 px tall. */
-@media (pointer: coarse) {
-  .schedule tbody th,
-  .schedule tbody td,
-  .ga-table tbody th,
-  .ga-table tbody td {
-    padding-top: 5px;
-    padding-bottom: 5px;
   }
 }
 
@@ -753,99 +295,8 @@ tbody tr[data-shape].hot th::after {
   }
 }
 
-/* ---- Captures (?capture) --------------------------------------------------------------------- */
-
 .capture :focus-visible {
   outline: none;
-}
-
-/* Open Graph cards (?capture=og at 1200×630). */
-.capture-og .sheet {
-  margin: 10px;
-  height: calc(100vh - 20px);
-  min-height: 0;
-  grid-template-columns: minmax(0, 1fr) 400px;
-  grid-template-rows: minmax(0, 1fr) auto;
-  grid-template-areas:
-    'views schedule'
-    'views title';
-}
-.capture-og .views {
-  position: relative;
-  height: auto;
-  align-self: stretch;
-}
-.capture-og .notes,
-.capture-og .definition,
-.capture-og #drawn-values,
-.capture-og .schedule h2,
-.capture-og .schedule .more,
-.capture-og .view figcaption .hint,
-.capture-og .title-block .nav,
-.capture-og .title-block > div:nth-last-child(2) {
-  display: none;
-}
-.capture-og .schedule {
-  align-self: end;
-}
-.capture-og .schedule tbody tr:not([data-shape~='A']) {
-  display: none;
-}
-.capture-og .schedule th,
-.capture-og .schedule td {
-  font-size: 15px;
-  padding: 3px 6px;
-}
-.capture-og .key-plan {
-  width: 34%;
-  height: 46%;
-}
-.capture-og .sheet-ga {
-  grid-template-columns: minmax(0, 1fr) 420px;
-  grid-template-rows: minmax(0, 1fr) auto;
-  grid-template-areas:
-    'table table'
-    'blank title';
-}
-.capture-og .sheet-ga .ga-plan,
-.capture-og .sheet-ga .ga-detail {
-  display: none;
-}
-.capture-og .ga-table {
-  border-bottom: 0;
-}
-.capture-og .ga-table .lineup-row td {
-  height: 230px;
-}
-.capture-og
-  .ga-table
-  tbody
-  tr:not([data-key='diameter']):not([data-key='obliquity']):not([data-key='rotationPeriod']) {
-  display: none;
-}
-.capture-og .sheet-ga .title-block {
-  border-left: var(--w-narrow) solid var(--ink-3);
-}
-
-.og-title {
-  display: none;
-}
-.capture-og .og-title {
-  display: block;
-  grid-area: blank;
-  align-self: end;
-  padding: 0 28px 34px;
-}
-.capture-og .og-title svg {
-  height: 44px;
-  width: auto;
-  overflow: visible;
-}
-.capture-og .og-title p {
-  margin: 14px 0 0;
-  font-size: 17px;
-  letter-spacing: 0.06em;
-  color: var(--ink-2);
 }
 
 .noscript {

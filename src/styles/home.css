@@ -1,0 +1,39 @@
+/* The home page: a schematic of the solar system filling the frame.
+   PLACEHOLDER from the restructuring; the home-page work replaces it (see the redesign spec, §2). */
+
+.sheet-home {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: calc(var(--vh) - 2 * var(--gap));
+}
+.sheet-home .corner.tl {
+  padding: 14px 16px 0;
+}
+.sheet-home h1 {
+  margin: 0;
+}
+.sheet-home .subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-3-text);
+}
+.sheet-home button.info {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+}
+.orrery {
+  position: relative;
+  min-height: 0;
+}
+.orrery .bodies ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  justify-content: center;
+  margin: 0;
+  padding: 24px 16px;
+  list-style: none;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}

@@ -34,9 +34,13 @@ export const PARAMS: ParamMeta[] = [
   { key: 'magneticField', shape: ['A'] },
 ];
 
-/** Values drawn from body pages, which have no main-table row but can be pointed at in the drawing. */
-export const SHEET_ONLY: Record<string, { term: string; source: string }> = {
-  polarRadius: { term: 'Polar radius (km)', source: 'bulk' },
-  coreRadius: { term: 'Core radius (km)', source: 'bulk' },
-  dipoleTilt: { term: 'Dipole tilt to rotational axis', source: 'magnetosphere' },
+/**
+ * Older deep-link keys for values that now live in a main row's popover: #polarRadius opens Diameter,
+ * #dipoleTilt opens Global Magnetic Field?, and so on.
+ */
+export const ALIASES: Record<string, string> = {
+  polarRadius: 'diameter',
+  coreRadius: 'diameter',
+  dipoleTilt: 'magneticField',
+  dipoleOffset: 'magneticField',
 };

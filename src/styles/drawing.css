@@ -22,10 +22,23 @@
 .drawing:not(.dragging) [data-ref] {
   cursor: pointer;
 }
-@media (max-width: 860px) {
-  /* On phones the line-up sits in a table that scrolls sideways: a swipe scrolls the table. */
-  #lineup {
-    touch-action: pan-x pan-y pinch-zoom;
+/* Paper-coloured fills that mask what is behind a symbol. */
+.layer-paper .ln {
+  fill: var(--paper);
+  stroke: none;
+}
+/* Wide transparent strokes over every referenced line, so a click finds it. */
+.layer-hit .ln,
+.layer-hit .ln.hot {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 12px;
+  stroke-linecap: round;
+  pointer-events: stroke;
+}
+@media (pointer: coarse) {
+  .layer-hit .ln {
+    stroke-width: 24px;
   }
 }
 .drawing:focus-visible {

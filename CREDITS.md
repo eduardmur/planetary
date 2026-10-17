@@ -4,7 +4,7 @@
 
 NASA Space Science Data Coordinated Archive (NSSDCA), Planetary Fact Sheets, curated by Dr. David R.
 Williams, NASA Goddard Space Flight Center: <https://nssdc.gsfc.nasa.gov/planetary/factsheet/>. A work of
-the US Government, in the public domain. Planetary Blueprints is unofficial and is not affiliated with
+the US Government, in the public domain. Planetary is unofficial and is not affiliated with
 or endorsed by NASA; it uses no NASA insignia.
 
 Positions in the tests are checked against JPL Horizons (<https://ssd.jpl.nasa.gov/horizons/>).

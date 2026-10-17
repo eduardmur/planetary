@@ -37,7 +37,7 @@ await mkdir(out, { recursive: true });
 const files = [];
 for (const page of PAGES) {
   const url = BASE + page;
-  const res = await fetch(url, { headers: { 'user-agent': 'planetary-blueprints data fetch' } });
+  const res = await fetch(url, { headers: { 'user-agent': 'planetary data fetch' } });
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
   const body = Buffer.from(await res.arrayBuffer());
   await writeFile(resolve(out, page), body);

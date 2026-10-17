@@ -33,6 +33,9 @@ export abstract class View {
   ox = 0;
   oy = 0;
 
+  /** Called once when a press on the view becomes a drag. */
+  onDrag: (() => void) | null = null;
+
   protected home: Orientation;
   /** Turntable views turn about the vertical only, at a fixed elevation. */
   protected turntable: boolean;
@@ -156,6 +159,13 @@ export abstract class View {
     wake();
   }
 
+  /** Turn the camera to `o`: animated over `ms`, or at once when `instant` or reduced motion. */
+  protected turn(o: Orientation, { ms = 900, instant = false } = {}) {
+    if (instant || reducedMotion()) this.camera.set(o);
+    else this.camera.animateTo(o, performance.now(), ms);
+    this.redraw();
+  }
+
   resetView() {
     if (reducedMotion()) this.camera.set(this.home);
     else this.camera.animateTo(this.home, performance.now());
@@ -179,7 +189,10 @@ export abstract class View {
       if (!last || e.pointerId !== last.id) return;
       const dx = e.clientX - last.x,
         dy = e.clientY - last.y;
-      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) svg.dataset.dragged = '1';
+      if (svg.dataset.dragged !== '1' && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) {
+        svg.dataset.dragged = '1';
+        this.onDrag?.();
+      }
       last = { x: e.clientX, y: e.clientY, id: e.pointerId };
       this.camera.orbit(-dx * 0.008, this.turntable ? 0 : dy * 0.008);
       this.redraw();

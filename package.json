@@ -1,5 +1,5 @@
 {
-  "name": "planetary-blueprints",
+  "name": "planetary",
   "private": true,
   "version": "0.1.0",
   "description": "NASA's Planetary Fact Sheet redrawn as a set of engineering drawings, with interactive 3D views.",

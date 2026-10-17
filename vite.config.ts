@@ -8,9 +8,9 @@ import { render404, renderPage, SHEETS } from './src/render/page.ts';
 
 const dir = import.meta.dirname;
 // GitHub Pages serves the site from /<repo>/; override with BASE_PATH for other hosts.
-const base = process.env.BASE_PATH ?? '/planetary-blueprints/';
-const site = process.env.SITE_URL ?? 'https://eduardmur.github.io/planetary-blueprints/';
-const repo = 'https://github.com/eduardmur/planetary-blueprints';
+const base = process.env.BASE_PATH ?? '/planetary/';
+const site = process.env.SITE_URL ?? 'https://eduardmur.github.io/planetary/';
+const repo = 'https://github.com/eduardmur/planetary';
 const issued = process.env.ISSUED ?? new Date().toISOString().slice(0, 10);
 
 const root = resolve(dir, '.pages');

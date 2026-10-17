@@ -1,6 +1,6 @@
 # Concept
 
-**Planetary Blueprints** redraws NASA's [Planetary Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/)
+**Planetary** redraws NASA's [Planetary Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/)
 as a set of engineering drawings: one sheet per body, plus a general arrangement. Every number that has
 a shape is drawn; the rest are listed exactly as NASA gives them.
 

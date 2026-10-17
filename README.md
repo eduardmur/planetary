@@ -6,10 +6,10 @@ from one and shows its formula.
 
 Unofficial: not affiliated with or endorsed by NASA.
 
-[Open the drawings](https://eduardmur.github.io/planetary-blueprints/) ·
-[Saturn](https://eduardmur.github.io/planetary-blueprints/saturn/) ·
-[Uranus](https://eduardmur.github.io/planetary-blueprints/uranus/#magneticField) ·
-[Pluto](https://eduardmur.github.io/planetary-blueprints/pluto/#orbitalInclination)
+[Open the drawings](https://eduardmur.github.io/planetary/) ·
+[Saturn](https://eduardmur.github.io/planetary/saturn/) ·
+[Uranus](https://eduardmur.github.io/planetary/uranus/#magneticField) ·
+[Pluto](https://eduardmur.github.io/planetary/pluto/#orbitalInclination)
 
 ![Saturn's sheet: the planet turning inside its rings; the obliquity row of NASA's table lights up the 26.7° angle between the axis and the orbit normal](docs/media/saturn.gif)
 
@@ -75,7 +75,7 @@ The tests check that:
 
 ```sh
 npm install
-npm run dev        # http://localhost:5173/planetary-blueprints/
+npm run dev        # http://localhost:5173/planetary/
 npm test           # unit tests
 npm run build
 npm run e2e        # browser tests against the build

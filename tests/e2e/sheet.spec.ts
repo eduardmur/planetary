@@ -1,10 +1,9 @@
-// Smoke test of the built site: every sheet loads without errors, draws, and links its schedule to
-// its drawings; phones never scroll sideways.
+// Body pages: every sheet loads without errors, draws, and links NASA's rows to its drawings; phones
+// never scroll sideways.
 
 import { expect, test } from '@playwright/test';
 
 const SLUGS = [
-  '',
   'mercury/',
   'venus/',
   'earth/',
@@ -25,14 +24,11 @@ for (const slug of SLUGS) {
       if (m.type() === 'error') errors.push(m.text());
     });
     await page.goto(slug);
-    // The main drawing is filled (the key plan may wait for a tap on phones).
-    const main = slug ? '#view-a' : '#lineup';
-    const paths = page.locator(`${main} path[d]:not([d=""])`);
+    // View A is filled (the key plan may wait for a tap on phones).
+    const paths = page.locator('#view-a path[d]:not([d=""])');
     await expect.poll(async () => paths.count()).toBeGreaterThan(8);
     // Twenty NASA rows.
-    await expect(
-      page.locator('table.main tbody tr[data-key], .ga-table tbody tr[data-key]'),
-    ).toHaveCount(20);
+    await expect(page.locator('table.main tbody tr[data-key]')).toHaveCount(20);
     // No horizontal scroll on the page itself.
     const [sw, iw] = await page.evaluate(() => [
       document.documentElement.scrollWidth,
@@ -107,14 +103,6 @@ test('ring radii stay clear of the key plan', async ({ page, isMobile }) => {
     });
     expect(overlaps, slug).toEqual([]);
   }
-});
-
-test('the general arrangement shows NASA definitions too', async ({ page, isMobile }) => {
-  await page.goto('');
-  const row = page.locator('tr[data-key="density"]');
-  if (isMobile) await row.tap();
-  else await row.hover();
-  await expect(page.locator('#definition .term')).toContainText('Density');
 });
 
 test('a deep link opens with its row in focus', async ({ page }) => {

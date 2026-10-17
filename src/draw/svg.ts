@@ -7,6 +7,7 @@ import type { Vec2 } from './vec.ts';
 
 /** Line types (ISO 128) and other marks, in paint order. CSS gives each its width and dash pattern. */
 export const LAYERS = [
+  'paper', // paper-coloured fills that mask what is behind a symbol
   'grid', // reference grids, ecliptic rings
   'hidden', // hidden lines, already cut into dashes in 3D
   'hidden-dash', // hidden lines dashed by CSS (screen-space pattern)
@@ -21,6 +22,7 @@ export const LAYERS = [
   'text-m',
   'text-l',
   'text-xl',
+  'hit', // transparent wide strokes over referenced lines, so they are easy to point at
 ] as const;
 
 export type Layer = (typeof LAYERS)[number];
@@ -51,9 +53,9 @@ export class DrawList {
   }
 
   /** A filled polygon (arrowheads, dots). */
-  fill(pts: readonly Vec2[], ref = '') {
+  fill(pts: readonly Vec2[], ref = '', layer: Layer = 'mark') {
     if (pts.length < 3) return;
-    const k = this.key('mark', ref);
+    const k = this.key(layer, ref);
     let arr = this.fills.get(k);
     if (!arr) this.fills.set(k, (arr = []));
     let d = `M${f(pts[0]![0])} ${f(pts[0]![1])}`;
@@ -62,8 +64,8 @@ export class DrawList {
   }
 
   /** A small filled circle. */
-  dot(c: Vec2, r: number, ref = '') {
-    const k = this.key('mark', ref);
+  dot(c: Vec2, r: number, ref = '', layer: Layer = 'mark') {
+    const k = this.key(layer, ref);
     let arr = this.fills.get(k);
     if (!arr) this.fills.set(k, (arr = []));
     arr.push(
@@ -75,13 +77,16 @@ export class DrawList {
 const NS = 'http://www.w3.org/2000/svg';
 
 export class SvgScene {
-  readonly root: SVGSVGElement;
+  readonly root: SVGSVGElement | SVGGElement;
   private layers = new Map<Layer, SVGGElement>();
   private paths = new Map<string, SVGPathElement>();
   private hot: string | null = null;
+  /** Mirror every referenced line into the hit layer (wide transparent strokes). */
+  private hit: boolean;
 
-  constructor(root: SVGSVGElement) {
+  constructor(root: SVGSVGElement | SVGGElement, opts: { hit?: boolean } = {}) {
     this.root = root;
+    this.hit = opts.hit ?? true;
     for (const l of LAYERS) {
       const g = document.createElementNS(NS, 'g');
       g.setAttribute('class', `layer layer-${l}`);
@@ -92,23 +97,30 @@ export class SvgScene {
 
   commit(list: DrawList) {
     const seen = new Set<string>();
-    const put = (k: string, d: string, filled: boolean) => {
-      const id = (filled ? 'f|' : 's|') + k;
+    const put = (id: string, layer: Layer, ref: string, d: string) => {
       seen.add(id);
       let el = this.paths.get(id);
       if (!el) {
-        const [layer, ref] = k.split('|') as [Layer, string];
         el = document.createElementNS(NS, 'path');
         el.setAttribute('class', `ln ln-${layer}`);
         if (ref) el.setAttribute('data-ref', ref);
         if (ref && this.hot && ref.split(' ').includes(this.hot)) el.classList.add('hot');
-        this.layers.get(filled ? 'mark' : layer)!.appendChild(el);
+        this.layers.get(layer)!.appendChild(el);
         this.paths.set(id, el);
       }
       if (el.getAttribute('d') !== d) el.setAttribute('d', d);
     };
-    for (const [k, arr] of list.strokes) put(k, arr.join(''), false);
-    for (const [k, arr] of list.fills) put(k, arr.join(''), true);
+    for (const [filled, map] of [
+      [false, list.strokes],
+      [true, list.fills],
+    ] as const) {
+      for (const [k, arr] of map) {
+        const [layer, ref] = k.split('|') as [Layer, string];
+        const d = arr.join('');
+        put((filled ? 'f|' : 's|') + k, layer, ref, d);
+        if (this.hit && ref && layer !== 'halo' && layer !== 'paper') put('h|' + k, 'hit', ref, d);
+      }
+    }
     for (const [id, el] of this.paths)
       if (!seen.has(id) && el.getAttribute('d')) el.setAttribute('d', '');
   }

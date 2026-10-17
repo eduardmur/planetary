@@ -15,7 +15,7 @@ import { PNG } from 'pngjs';
 const { GIFEncoder, quantize, applyPalette } = gifenc;
 const root = resolve(import.meta.dirname, '..');
 const port = 4179;
-const base = `http://localhost:${port}/planetary-blueprints/`;
+const base = `http://localhost:${port}/planetary/`;
 const SHEETS = [
   'ga',
   'mercury',

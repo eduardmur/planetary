@@ -109,7 +109,7 @@ async function query(command, params, attempts = 5) {
   const url = `${API}?${new URLSearchParams({ ...params, COMMAND: `'${command}'` })}`;
   for (let attempt = 1; ; attempt++) {
     try {
-      const res = await fetch(url, { headers: { 'user-agent': 'planetary-blueprints tests' } });
+      const res = await fetch(url, { headers: { 'user-agent': 'planetary tests' } });
       if (res.status === 429 || res.status >= 500) throw new Error(`HTTP ${res.status}`);
       const body = await res.json();
       if (!res.ok || body.error) {
