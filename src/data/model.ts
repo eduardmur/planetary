@@ -5,7 +5,6 @@
 import type { MeanElements } from '../astro/index.ts';
 import type { BodyModel, RingEdge } from '../views/body.ts';
 import type { KeyPlanModel, OrbitShape } from '../views/keyplan.ts';
-import type { SystemBody } from '../views/system.ts';
 import { FACTS, body, mainVal, needRow, num, row, type BodyId, type Val } from './index.ts';
 
 const SUN_ORBITING: BodyId[] = [
@@ -246,6 +245,14 @@ export function keyPlanModel(id: BodyId): KeyPlanModel {
   if (el) m.j2000 = el;
   if (!moon && id !== 'earth') m.earth = orbitShape('earth');
   return m;
+}
+
+/** A body that circles the Sun: its orbit as drawn and its J2000 elements for positions. */
+export interface SystemBody {
+  id: string;
+  name: string;
+  orbit: OrbitShape;
+  j2000: MeanElements;
 }
 
 export function systemBodies(): SystemBody[] {

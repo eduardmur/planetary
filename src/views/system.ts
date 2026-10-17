@@ -13,12 +13,7 @@ import { DEG, type Vec2, type Vec3 } from '../draw/vec.ts';
 import type { OrbitShape } from './keyplan.ts';
 import { reducedMotion, View } from './view.ts';
 
-export interface SystemBody {
-  id: string;
-  name: string;
-  orbit: OrbitShape;
-  j2000: MeanElements;
-}
+import type { SystemBody } from '../data/model.ts';
 
 export interface SystemOpts {
   /** Draw only bodies whose aphelion is inside this radius (10⁶ km), at a larger scale. */
