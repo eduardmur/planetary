@@ -17,7 +17,7 @@ const root = resolve(import.meta.dirname, '..');
 const port = 4179;
 const base = `http://localhost:${port}/planetary/`;
 const SHEETS = [
-  'ga',
+  'home',
   'mercury',
   'venus',
   'earth',
@@ -29,7 +29,10 @@ const SHEETS = [
   'neptune',
   'pluto',
 ];
-const url = (id, q = '') => `${base}${id === 'ga' ? '' : `${id}/`}${q}`;
+const url = (id, q = '') => `${base}${id === 'home' ? '' : `${id}/`}${q}`;
+/** The home page's clock is frozen at the build date in every capture. */
+const issued = process.env.ISSUED ?? new Date().toISOString().slice(0, 10);
+const still = (id) => (id === 'home' ? `date=${issued}` : 't=2500');
 const only = process.argv.slice(2);
 const want = (what) => !only.length || only.includes(what);
 
@@ -77,7 +80,7 @@ if (want('og')) {
     deviceScaleFactor: 1,
   });
   for (const id of SHEETS) {
-    const page = await open(ctx, id, '?capture=og&t=2500');
+    const page = await open(ctx, id, `?capture=og&${still(id)}`);
     const file = `public/og/${id}.png`;
     await page.screenshot({ path: resolve(root, file) });
     await page.close();
@@ -94,13 +97,13 @@ if (want('stills')) {
   });
   for (const [id, hash, file] of [
     ['uranus', '#magneticField', 'docs/media/sheet-uranus-dipole.png'],
-    ['ga', '', 'media/sheet-ga.png'],
+    ['home', '', 'media/sheet-home.png'],
     ['saturn', '', 'media/sheet-saturn.png'],
     ['pluto', '#orbitalInclination', 'media/sheet-pluto-inclination.png'],
   ]) {
-    const page = await open(desk, id, `?capture&t=2500${hash}`);
+    const page = await open(desk, id, `?capture&${still(id)}${hash}`);
     await page.waitForTimeout(1100); // camera turns for the inclination view
-    await page.screenshot({ path: resolve(root, file), fullPage: id === 'ga' });
+    await page.screenshot({ path: resolve(root, file) });
     await page.close();
     console.log(file, size(file));
   }
@@ -114,9 +117,13 @@ if (want('stills')) {
 
 // ---- GIFs ----------------------------------------------------------------------------------------
 
-/** Capture `frames` screenshots of `selector`, calling `step(i)` in the page before each. The palette
- *  comes from the frames `paletteAt`, so a highlight that is off in the first frame keeps its colour. */
-async function gif(page, selector, frames, fps, step, file, paletteAt = [0]) {
+/**
+ * Capture `frames` screenshots of `selector`, calling `step(i)` in the page before each. The palette
+ * comes from the frames `paletteAt`, so a highlight that is off in the first frame keeps its colour.
+ * With `fade` > 0 the loop's seam is a crossfade: `fade` more frames are taken past the end and blended
+ * into the first ones, for motion that does not come back to where it started.
+ */
+async function gif(page, selector, frames, fps, step, file, paletteAt = [0], fade = 0) {
   const el = page.locator(selector);
   const samples = [];
   for (const i of paletteAt) {
@@ -128,11 +135,21 @@ async function gif(page, selector, frames, fps, step, file, paletteAt = [0]) {
   const palette = quantize(Buffer.concat(samples), 32, { format: 'rgb444' });
   await page.evaluate(step, 0);
   await page.waitForTimeout(1500); // let any camera turn settle before the loop starts
-  const enc = GIFEncoder();
-  for (let i = 0; i < frames; i++) {
+  const shots = [];
+  for (let i = 0; i < frames + fade; i++) {
     await page.evaluate(step, i);
     await page.waitForTimeout(40);
-    const { data, width, height } = PNG.sync.read(await el.screenshot());
+    shots.push(PNG.sync.read(await el.screenshot()));
+  }
+  const enc = GIFEncoder();
+  for (let i = 0; i < frames; i++) {
+    const { data, width, height } = shots[i];
+    if (i < fade) {
+      // Frame i fades in over the frames that follow the last one.
+      const w = (i + 1) / (fade + 1);
+      const tail = shots[frames + i].data;
+      for (let k = 0; k < data.length; k++) data[k] = Math.round(tail[k] * (1 - w) + data[k] * w);
+    }
     const index = applyPalette(data, palette, 'rgb444');
     enc.writeFrame(index, width, height, { palette, delay: Math.round(1000 / fps), repeat: 0 });
   }
@@ -171,27 +188,25 @@ if (want('gifs')) {
     void span;
     await page.close();
   }
-  // The line-up, all ten turning at 1 s = 1 h.
+  // The home page: one year of the solar system, four days a frame, from the build date. The planets
+  // do not all come back to their places in a year, so the seam is a crossfade.
   {
-    const wide = await browser.newContext({
-      viewport: { width: 1500, height: 900 },
-      deviceScaleFactor: 1,
-    });
-    const page = await open(wide, 'ga', '?capture&t=0');
+    const page = await open(ctx, 'home', `?capture&date=${issued}`);
+    await page.evaluate((t0) => (window.__gifStart = t0), Date.parse(`${issued}T00:00:00Z`));
     await gif(
       page,
-      '.lineup-row td',
-      72,
-      12,
+      '.orrery',
+      92,
+      15,
       (i) => {
-        const pb = window.__pb;
-        const t = (i / 12) * 1000;
-        pb.views.lineup.clock = () => t;
-        pb.views.lineup.redraw();
+        const day = new Date(window.__gifStart + i * 4 * 86_400_000).toISOString().slice(0, 10);
+        window.__pb.views.orrery.setDate(day);
       },
-      'docs/media/lineup.gif',
+      'docs/media/orrery.gif',
+      [0],
+      12,
     );
-    await wide.close();
+    await page.close();
   }
   await ctx.close();
 }

@@ -10,3 +10,4 @@ playwright-report
 .pages
 /media
 /public/404.html
+/.claude/
