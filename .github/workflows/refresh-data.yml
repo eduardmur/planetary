@@ -1,0 +1,46 @@
+# Once a week, download NASA's fact sheet pages again. If anything changed, open a pull request with
+# the new snapshot, the re-parsed data and the updated discrepancy ledger. Nothing is published until
+# a person reviews and merges it.
+name: Refresh NASA data
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run data:fetch
+      - name: Keep the old snapshot if only the retrieval time changed
+        run: |
+          if git diff --quiet -- 'data/raw/*.html'; then
+            git checkout -- data/raw/manifest.json
+            echo "NASA pages unchanged."
+          fi
+      - name: Parse (a changed page layout fails here, which is the point)
+        run: npm run data:parse && node scripts/ledger.ts
+      - name: Open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then exit 0; fi
+          branch="data/refresh-$(date -u +%Y-%m-%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add -A data src/data
+          git commit -m "data: refresh NASA fact sheet snapshot"
+          git push -u origin "$branch"
+          gh pr create --title "data: NASA fact sheets changed" --body "The weekly fetch found changes on NASA's pages. Review the diff of \`data/raw/\`, \`src/data/factsheet.json\` and \`data/discrepancies.md\`, then run the checks (push an empty commit if CI did not start) and merge."

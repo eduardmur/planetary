@@ -1,0 +1,29 @@
+name: A value looks wrong
+description: A number on a sheet does not match NASA's fact sheet
+title: 'Data: '
+labels: [data]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The sheets copy NASA's values as published, including where NASA's own pages disagree
+        (see data/discrepancies.md). If NASA's page itself is wrong, please tell its curator — the
+        address is at the bottom of every fact sheet.
+  - type: input
+    id: sheet
+    attributes:
+      label: Sheet and value
+      placeholder: e.g. Mars, Obliquity to Orbit, 25.2
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: NASA page that shows a different value
+      placeholder: https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What NASA's page says

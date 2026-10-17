@@ -1,0 +1,132 @@
+/* Line types and lettering of the drawings: ISO 128 line types, two widths at 1:2, dash elements as
+   multiples of the line width (dash 12d, gap 3d, long dash 24d, dot 0.5d). */
+
+.drawing {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  /* Vertical swipes scroll the page and pinches zoom it, over any drawing. */
+  touch-action: pan-y pinch-zoom;
+}
+.drawing.turntable {
+  /* A sideways drag turns the view. */
+  cursor: grab;
+}
+.drawing.turntable.dragging {
+  cursor: grabbing;
+}
+.drawing:not(.dragging) [data-ref] {
+  cursor: pointer;
+}
+@media (max-width: 860px) {
+  /* On phones the line-up sits in a table that scrolls sideways: a swipe scrolls the table. */
+  #lineup {
+    touch-action: pan-x pan-y pinch-zoom;
+  }
+}
+.drawing:focus-visible {
+  outline: 1px dashed var(--ink-3);
+  outline-offset: -4px;
+}
+
+.ln {
+  fill: none;
+  stroke: var(--ink);
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+}
+.ln-wide {
+  stroke-width: var(--w-wide);
+  stroke-linecap: round;
+}
+.ln-thin {
+  stroke-width: var(--w-narrow);
+  stroke: var(--ink-2);
+}
+.ln-grid {
+  stroke-width: var(--w-narrow);
+  stroke: var(--ink-4);
+}
+.ln-hidden {
+  stroke-width: var(--w-narrow);
+  stroke: var(--ink-2);
+}
+.ln-hidden-dash {
+  stroke-width: var(--w-narrow);
+  stroke: var(--ink-2);
+  stroke-dasharray: calc(12 * var(--d)) calc(3 * var(--d));
+}
+.ln-center {
+  stroke-width: var(--w-narrow);
+  stroke: var(--ink-2);
+  stroke-dasharray: calc(24 * var(--d)) calc(3 * var(--d)) calc(1 * var(--d)) calc(3 * var(--d));
+}
+.ln-phantom {
+  stroke-width: var(--w-narrow);
+  stroke: var(--ink-3);
+  stroke-dasharray: calc(24 * var(--d)) calc(3 * var(--d)) calc(1 * var(--d)) calc(3 * var(--d))
+    calc(1 * var(--d)) calc(3 * var(--d));
+}
+.ln-dim {
+  stroke-width: var(--w-narrow);
+  stroke: var(--ink-2);
+}
+.layer-mark .ln {
+  fill: var(--ink-2);
+  stroke: none;
+}
+
+/* Single-stroke lettering: stroke width h/10, never under one device pixel. */
+.layer-halo .ln {
+  stroke: var(--paper);
+  stroke-width: 3.6px;
+  stroke-linecap: round;
+}
+.layer-text-s .ln,
+.layer-text-m .ln,
+.layer-text-l .ln,
+.layer-text-xl .ln {
+  stroke: var(--ink);
+  stroke-linecap: round;
+}
+.layer-text-s .ln {
+  stroke-width: max(0.8px, var(--w-narrow));
+}
+.layer-text-m .ln {
+  stroke-width: max(0.9px, var(--w-narrow));
+}
+.layer-text-l .ln {
+  stroke-width: 1.1px;
+}
+.layer-text-xl .ln {
+  stroke-width: 2px;
+}
+
+/* The parameter in focus: checker's yellow, and a touch heavier so it also reads without colour. */
+.ln.hot {
+  stroke: var(--hot);
+}
+.layer-mark .ln.hot {
+  fill: var(--hot);
+}
+.layer-thin .ln.hot,
+.layer-dim .ln.hot,
+.layer-center .ln.hot,
+.layer-phantom .ln.hot,
+.layer-hidden .ln.hot {
+  stroke-width: calc(var(--w-narrow) * 1.6);
+}
+.layer-halo .ln.hot {
+  stroke: var(--paper);
+}
+.has-hot .layer-thin .ln:not(.hot),
+.has-hot .layer-wide .ln:not(.hot) {
+  opacity: 0.7;
+}
+.drawing.clip {
+  overflow: hidden;
+}
