@@ -203,8 +203,8 @@ export class BodyView extends View {
   }
 
   /**
-   * Fit the drawing's footprint at the home orientation into the free area: the whole view, or, with
-   * the key-plan inset, the larger of the areas left of it and above it.
+   * Fit the drawing's footprint (the home orientation, and the rings turned any way) into the free
+   * area: the whole view, or, with the key-plan inset, the larger of the areas left of it and above it.
    */
   override measure() {
     super.measure();
@@ -240,7 +240,12 @@ export class BodyView extends View {
     this.redraw();
   }
 
-  /** Bounding box (screen-plane units, y up) of everything drawn at the home orientation. */
+  /**
+   * Bounding box (screen-plane units, y up) of everything drawn at the home orientation, and of the
+   * outer ring at every turn the reader can give it: any yaw at the home pitch, or in the orbit plane
+   * (where the obliquity keeps the view while it is turned). Turned, the other lines stay within the
+   * reach of the orbit's trace; the rings sweep further, and would run out of the view.
+   */
   private footprint(): Box {
     const m = this.m;
     const L = layout(m);
@@ -257,19 +262,29 @@ export class BodyView extends View {
       pts.push([Math.sin(t) * (L.rArc + 0.1), 0, Math.cos(t) * (L.rArc + 0.1)]);
     }
     const outer = m.rings ? Math.max(...m.rings.edges.map((e) => e.r)) / (m.diameter / 2) : 0;
+    const ring: Vec3[] = [];
     if (outer) {
       const e1 = norm(cross(axis, [0, 1, 0]));
       const e2 = norm(cross(axis, e1));
       for (let i = 0; i < 64; i++) {
         const t = (i / 64) * 2 * Math.PI;
-        pts.push(
+        ring.push(
           scale([...e1].map((v, j) => v * Math.cos(t) + e2[j]! * Math.sin(t)) as Vec3, outer),
         );
       }
+      pts.push(...ring);
     }
     pts.push(scale(axis, L.axisPos + 0.12), scale(axis, -L.axisNeg));
     pts.push([0, 0, L.normal], [0, 0, -L.trace], [L.trace, 0, 0], [-L.trace, 0, 0]);
     const p = pts.map((q) => cam.project(q));
+    // In the orbit plane the orbit normal stands at its full length, at any yaw.
+    p.push([0, L.normal], [0, -L.normal]);
+    // The view at yaw + 180° is not the mirror image of the view at yaw: sample the whole turn.
+    for (const pitch of [BODY_HOME.pitch, TRUE_OBLIQUITY.pitch])
+      for (let d = 0; d < 360; d += 15) {
+        const c = new Camera({ yaw: d * DEG, pitch });
+        for (const q of ring) p.push(c.project(q));
+      }
     const b = {
       x0: Math.min(...p.map((q) => q[0])),
       x1: Math.max(...p.map((q) => q[0])),
