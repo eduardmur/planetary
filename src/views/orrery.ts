@@ -513,7 +513,7 @@ export class OrreryView extends View {
       // lettering. Not near a symbol, which stays whole: its pen reaches 2 px past its box.
       const symbols = others.concat(shift(p.box, p.at));
       if (this.touchAt && labels.onInk(name) > 0 && !symbols.some((o) => meets(o, grow(name, 4))))
-        labels.mask(dl, corners(name), 2);
+        labels.mask(dl, grow(name, 2));
     }
     this.scene.commit(dl);
   }
@@ -633,16 +633,6 @@ function shift(b: Box, d: Vec2): Box {
 
 function grow(b: Box, d: number): Box {
   return { x0: b.x0 - d, y0: b.y0 - d, x1: b.x1 + d, y1: b.y1 + d };
-}
-
-/** A box's corners, clockwise from the top left. */
-function corners(b: Box): Vec2[] {
-  return [
-    [b.x0, b.y0],
-    [b.x1, b.y0],
-    [b.x1, b.y1],
-    [b.x0, b.y1],
-  ];
 }
 
 /** Whether two boxes overlap (touching is not overlapping). */
