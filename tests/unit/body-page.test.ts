@@ -244,6 +244,24 @@ describe('body pages', () => {
     ).toBe(false);
   });
 
+  it('each popover has ‹ › before ×, with none before the first row or after the last', () => {
+    for (const [id] of dom)
+      for (const [i, p] of PARAMS.entries()) {
+        const header = popover(id, p.key).querySelector('header')!;
+        const buttons = header.querySelectorAll('button');
+        expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
+          'Previous row',
+          'Next row',
+          'Close',
+        ]);
+        expect(buttons.map((b) => b.getAttribute('aria-disabled') ?? '')).toEqual([
+          i === 0 ? 'true' : '',
+          i === PARAMS.length - 1 ? 'true' : '',
+          '',
+        ]);
+      }
+  });
+
   it('Orbital Velocity says what lights up, since no line is sized by it', () => {
     for (const [id] of dom) {
       const def = popover(id, 'orbitalVelocity');
@@ -258,6 +276,21 @@ describe('body pages', () => {
     expect(text(dom.get('saturn')!.querySelector('dialog#info'))).toContain(
       'KEY PLAN: SUN, BODY AND MOTION ARROW ARE SYMBOLS, NOT TO SCALE.',
     );
+  });
+
+  it('View A and the key plan carry each caption they show', () => {
+    for (const [id, root] of dom) {
+      const [long, short] = root.querySelectorAll('.view-a .caption > span');
+      expect(long!.getAttribute('data-edge-on')).toBe('Orbit plane edge-on');
+      // Phones take the short form, which fits a 320 px screen.
+      expect(['data-plan', 'data-tilt', 'data-edge-on'].map((a) => short!.getAttribute(a))).toEqual(
+        ['20° above orbit', 'Tilt true size', 'Orbit edge-on'],
+      );
+      // Square on and edge-on, both in place so that the plan keeps its size as it turns.
+      const plan = root.querySelectorAll('.key-plan .caption > span').map(text);
+      expect(plan, id).toHaveLength(2);
+      expect(plan[1]).toContain('edge-on');
+    }
   });
 
   it('no × Earth where NASA’s ratio is "Unknown" (the giants’ surface pressure)', () => {

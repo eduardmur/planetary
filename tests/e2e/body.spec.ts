@@ -580,6 +580,12 @@ test.describe('at 1280 × 720', () => {
         expect(a.top, `${id} ${key}`).toBeGreaterThanOrEqual(d.top - 0.5);
         expect(a.bottom, `${id} ${key}`).toBeLessThanOrEqual(d.bottom + 0.5);
         expect(d.bottom, `${id} ${key}`).toBeLessThanOrEqual(f.bottom - 2.5);
+        // Text scrolls under it; the link itself takes the click.
+        const onLink = await page.evaluate(
+          ([x, y]) => !!document.elementFromPoint(x!, y!)?.closest('.src a'),
+          [(a.left + a.right) / 2, (a.top + a.bottom) / 2],
+        );
+        expect(onLink, `${id} ${key}`).toBe(true);
       }
     }
     // A popover under its row ends inside the frame.
@@ -634,6 +640,112 @@ test.describe('at 1536 × 864', () => {
       expect(off, key).toBeLessThanOrEqual(0.5);
     }
   });
+});
+
+/** Every row of a body, opened in turn: whether its popover fits, and how far NASA's link reaches
+ *  up over the last line of text above it. */
+const footers = (page: Page) =>
+  page.evaluate(() => {
+    const out: { key: string; fits: boolean; over: number }[] = [];
+    for (const row of document.querySelectorAll<HTMLElement>('tr[data-key]')) {
+      const key = row.dataset.key!;
+      (window as unknown as Hooks).__pb.show(key);
+      const def = document.getElementById(`def-${key}`)!;
+      const src = def.querySelector('.src')!;
+      const last = [...src.previousElementSibling!.getClientRects()].at(-1)!;
+      const fits = def.scrollHeight <= def.clientHeight;
+      out.push({ key, fits, over: last.bottom - src.getBoundingClientRect().top });
+    }
+    return out;
+  });
+
+test("NASA's link never lies over the last line of a popover that fits", async ({ page }) => {
+  for (const id of BODIES) {
+    await page.goto(`${id}/`);
+    await drawn(page);
+    for (const f of await footers(page))
+      if (f.fits) expect(f.over, `${id} ${f.key}`).toBeLessThanOrEqual(0.5);
+  }
+});
+
+test.describe('with forced colours, NASA’s link', () => {
+  test('starts under the last line, where its rule is drawn', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Chromium has forced colours');
+    await page.emulateMedia({ forcedColors: 'active' });
+    for (const id of BODIES) {
+      await page.goto(`${id}/`);
+      await drawn(page);
+      for (const f of await footers(page))
+        if (f.fits) expect(f.over, `${id} ${f.key}`).toBeLessThanOrEqual(0.5);
+    }
+  });
+});
+
+// Opened under its row, a popover that runs past the legend keeps its own height: there is no text
+// left to cut there.
+for (const [viewport, deviceScaleFactor, id, keys] of [
+  [
+    { width: 1920, height: 1080 },
+    1,
+    'saturn',
+    ['obliquity', 'orbitalInclination', 'orbitalPeriod'],
+  ],
+  [{ width: 1440, height: 900 }, 2, 'pluto', ['perihelion']],
+] as const) {
+  test.describe(`at ${viewport.width} × ${viewport.height}, ×${deviceScaleFactor}`, () => {
+    test.use({ viewport, deviceScaleFactor });
+    test('a popover under its row ends with its text', async ({ page, isMobile }) => {
+      test.skip(isMobile, 'desktop size');
+      await page.goto(`${id}/`);
+      await drawn(page);
+      for (const key of keys) {
+        await show(page, key);
+        const def = page.locator(`#def-${key}`);
+        await expect(def).toBeVisible();
+        await page.waitForTimeout(100);
+        expect(await def.getAttribute('data-side'), key).toBe('below');
+        // Less than a row of paper under NASA's link (it ran on to the frame's foot).
+        const [d, a] = [await rect(def), await rect(def.locator('.src'))];
+        expect(d.bottom - a.bottom, key).toBeLessThan(24);
+      }
+    });
+  });
+}
+
+test.describe('at 880 × 800', () => {
+  test.use({ viewport: { width: 880, height: 800 } });
+  test('the key plan keeps its size as it turns edge-on', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'desktop layout');
+    for (const id of ['earth', 'moon']) {
+      await page.goto(`${id}/`);
+      await drawn(page);
+      const plan = await rect(page.locator('#key-plan'));
+      await show(page, 'orbitalInclination');
+      await expect(page.locator('.key-plan .caption')).toHaveAttribute('data-edge', '');
+      expect(await rect(page.locator('#key-plan')), id).toEqual(plan);
+    }
+  });
+});
+
+test('the notes name the row stepper where the layout has it', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'pointer');
+  const line = async () => {
+    await page.locator('button.info').click();
+    const items = page.locator('dialog#info .info-body ul').first().locator('li');
+    const text = await items.evaluateAll((li) =>
+      li.map((l) => (l as HTMLElement).innerText).find((t) => t.includes('‹ ›')),
+    );
+    await page.keyboard.press('Escape');
+    return text;
+  };
+  await page.goto('saturn/');
+  expect(await line()).toBe(
+    'While a definition is open, ↑ ↓ or ‹ › above the table step through the rows.',
+  );
+  await page.setViewportSize({ width: 640, height: 800 });
+  expect(await line()).toBe(
+    'While a definition is open, ↑ ↓ or ‹ › in the definition step through the rows.',
+  );
 });
 
 test('phones: a tapped row sits between the sticky drawing and the docked popover', async ({
@@ -706,7 +818,149 @@ test('phones: the notes speak of taps, not of a mouse or keys', async ({ page, i
   expect(text).toContain('double-tap');
   expect(text).not.toContain('double-click');
   expect(text).not.toContain('←');
+  expect(text).not.toContain('↑');
   expect(text).toContain('Tap a row');
+  expect(text).toContain(
+    'While a definition is open, ‹ › in the definition step through the rows.',
+  );
+});
+
+test('phones: ‹ › in the popover step through the rows, and the drawing follows', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'phones');
+  const keys = await page
+    .goto('uranus/')
+    .then(() =>
+      page
+        .locator('tr[data-key]')
+        .evaluateAll((rows) => rows.map((r) => r.getAttribute('data-key')!)),
+    );
+  for (const size of [
+    { width: 390, height: 664 },
+    { width: 750, height: 342 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.goto('uranus/');
+    await drawn(page);
+    const size0 = await page.locator('.views').boundingBox();
+    await page.locator('#b-mass').tap();
+    await expect(page.locator('#def-mass')).toBeVisible();
+    for (const key of keys.slice(1)) {
+      const b = await rect(open(page).locator('.step[data-step="1"]'));
+      expect(b.right - b.left).toBeGreaterThanOrEqual(36);
+      await page.touchscreen.tap((b.left + b.right) / 2, (b.top + b.bottom) / 2);
+      await expect(page.locator(`#def-${key}`)).toBeVisible();
+      await expect(page.locator('tr.hot')).toHaveAttribute('data-key', key);
+      await expect.poll(() => hash(page)).toBe(key);
+      // The drawing shown is the one the row needs.
+      const shape = (await page.locator(`tr[data-key="${key}"]`).getAttribute('data-shape')) ?? '';
+      if (shape.includes('P')) await expect(page.locator('.views')).toHaveClass(/show-plan/);
+      else if (shape.includes('A'))
+        await expect(page.locator('.views')).not.toHaveClass(/show-plan/);
+      await settled(page);
+      // The row is in sight, clear of its popover (and, upright, of the drawing above it), and
+      // the drawings keep their size.
+      const [r, d, v] = [
+        await rect(page.locator(`tr[data-key="${key}"]`)),
+        await rect(page.locator(`#def-${key}`)),
+        await rect(page.locator('.views')),
+      ];
+      const top = size.width < size.height ? v.bottom - 1 : 0;
+      expect(r.top, `${size.width} ${key}`).toBeGreaterThanOrEqual(top);
+      expect(r.bottom, `${size.width} ${key}`).toBeLessThanOrEqual(size.height + 0.5);
+      expect(r.bottom <= d.top + 1 || r.top >= d.bottom - 1, `${size.width} ${key}`).toBe(true);
+      const now = await page.locator('.views').boundingBox();
+      expect([now!.width, now!.height]).toEqual([size0!.width, size0!.height]);
+    }
+    await expect(open(page).locator('.step[data-step="1"]')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  }
+});
+
+test('phones: the drawing toggles leave the table where it is', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'phones');
+  await page.goto('earth/');
+  await drawn(page);
+  await page.locator('#b-perihelion').tap();
+  await expect(page.locator('#def-perihelion')).toBeVisible();
+  await settled(page);
+  const y = await page.evaluate(() => scrollY);
+  for (const swap of ['.key-plan .swap', '.view-a .swap']) {
+    const b = await rect(page.locator(swap));
+    await page.touchscreen.tap((b.left + b.right) / 2, (b.top + b.bottom) / 2);
+    await page.waitForTimeout(300);
+    await settled(page);
+    expect(await page.evaluate(() => scrollY), swap).toBe(y);
+    const [r, v, s] = [
+      await rect(page.locator('tr[data-key="perihelion"]')),
+      await rect(page.locator('.views')),
+      await rect(page.locator('#def-perihelion')),
+    ];
+    expect(r.top, swap).toBeGreaterThanOrEqual(v.bottom - 1);
+    expect(r.bottom, swap).toBeLessThanOrEqual(s.top + 1);
+  }
+});
+
+test('phones: a double tap on View A leaves the table where it was', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'touch');
+  await page.goto('saturn/');
+  await drawn(page);
+  // The planet's middle: a first tap there opens a row, whose sheet scrolls the table.
+  const a = await rect(page.locator('#view-a'));
+  const x = (a.left + a.right) / 2,
+    y = (a.top + a.bottom) / 2;
+  await page.touchscreen.tap(x, y);
+  await page.waitForTimeout(120);
+  await page.touchscreen.tap(x, y);
+  await page.waitForTimeout(600);
+  await settled(page);
+  await expect(open(page)).toHaveCount(0);
+  expect(await page.evaluate(() => scrollY)).toBe(0);
+});
+
+test('phones: View A’s caption keeps to one line and the drawing to its size', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'phones');
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('saturn/');
+  await drawn(page);
+  // The drawing's size, which no caption may change.
+  const size = () =>
+    page.locator('#view-a').evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return [r.width, r.height];
+    });
+  const svg = await size();
+  const short = page.locator('.view-a .caption .short');
+  const fits = () =>
+    page.locator('.view-a .caption').evaluate((c) => c.scrollWidth <= c.clientWidth);
+  await expect(short).toBeVisible();
+  await expect(page.locator('.view-a .caption .long')).toBeHidden();
+  await expect(short).toHaveText('20° above orbit');
+  expect(await fits()).toBe(true);
+  await show(page, 'obliquity');
+  await expect(short).toHaveText('Tilt true size');
+  expect(await fits()).toBe(true);
+  // Turned in the orbit plane, as a sideways drag leaves it.
+  await page.evaluate(() => {
+    const a = (window as unknown as Hooks).__pb.views.a as unknown as {
+      camera: { orbit(y: number, p: number): void };
+      redraw(): void;
+      onTurned(): void;
+    };
+    a.camera.orbit(0.6, 0);
+    a.redraw();
+    a.onTurned();
+  });
+  await expect(short).toHaveText('Orbit edge-on');
+  expect(await fits()).toBe(true);
+  expect(await size()).toEqual(svg);
 });
 
 test('phones: turning the phone brings the tab and the selected row back into sight', async ({
@@ -757,6 +1011,18 @@ test('phones: turning the phone brings the tab and the selected row back into si
   await page.setViewportSize(portrait);
   await page.waitForTimeout(300);
   await between('magneticField');
+
+  // WebKit may scroll the page once more as it resizes after the turn.
+  await page.goto('uranus/');
+  await drawn(page);
+  await page.locator('#b-mass').tap();
+  await expect(page.locator('#def-mass')).toBeVisible();
+  await settled(page);
+  await page.setViewportSize(landscape);
+  await page.waitForTimeout(300);
+  await page.setViewportSize(portrait);
+  await page.waitForTimeout(300);
+  await between('mass');
 });
 
 test('the row stepper walks the rows without moving the pointer', async ({ page, isMobile }) => {
@@ -787,6 +1053,149 @@ test('the row stepper walks the rows without moving the pointer', async ({ page,
   expect(d.top).toBeGreaterThanOrEqual(s.bottom - 0.5);
   await page.locator('.steps .step[data-step="-1"]').click();
   await expect(page.locator('#def-ringSystem')).toBeVisible();
+});
+
+/** Is the stepper clear of the selected row, and does it hide what lies under it? */
+const stepperClear = (page: Page) =>
+  page.evaluate(() => {
+    const steps = document.querySelector('.schedule > .steps')!;
+    const s = steps.getBoundingClientRect();
+    const r = document.querySelector('tr.hot')!.getBoundingClientRect();
+    const bg = getComputedStyle(steps).backgroundColor;
+    return {
+      clear: s.bottom <= r.top || s.top >= r.bottom,
+      opaque: bg.startsWith('rgb(') || bg.endsWith(', 1)'),
+    };
+  });
+
+// Windows short enough to scroll: stepping to the foot of the table scrolls the page, and stepping
+// back scrolls it up again.
+for (const viewport of [
+  { width: 1280, height: 580 },
+  { width: 960, height: 547 },
+]) {
+  test.describe(`at ${viewport.width} × ${viewport.height}`, () => {
+    test.use({ viewport });
+    test('the stepper stays under a pointer that does not move, clear of the row', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'mouse');
+      await page.goto('saturn/');
+      await drawn(page);
+      await page.locator('#b-mass').click();
+      await expect(page.locator('#def-mass')).toBeVisible();
+      // The mouse goes to ›, clicks 19 times, goes 24 px left to ‹ and clicks 19 times.
+      const at: Record<string, { x: number; y: number }> = {};
+      for (const dir of ['1', '-1']) {
+        const b = await rect(page.locator(`.steps .step[data-step="${dir}"]`));
+        at[dir] = { x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 };
+      }
+      const under = ({ x, y }: { x: number; y: number }) =>
+        page.evaluate(
+          ([x, y]) => document.elementFromPoint(x!, y!)?.closest('.steps .step')?.ariaLabel,
+          [x, y],
+        );
+      for (const [dir, label] of [
+        ['1', 'Next row'],
+        ['-1', 'Previous row'],
+      ] as const) {
+        await page.mouse.move(at[dir]!.x, at[dir]!.y);
+        for (let i = 0; i < 19; i++) {
+          expect(await under(at[dir]!), `${label} ${i + 1}`).toBe(label);
+          await page.mouse.down();
+          await page.mouse.up();
+          // Under it as the page scrolls, and clear of the row once it rests.
+          expect(await under(at[dir]!), `${label} ${i + 1}, scrolling`).toBe(label);
+          await settled(page);
+          expect(await stepperClear(page), `${label} ${i + 1}`).toEqual({
+            clear: true,
+            opaque: true,
+          });
+        }
+      }
+      await expect(page.locator('#def-mass')).toBeVisible();
+    });
+
+    test('a row scrolled under the stepper comes out from under it when stepped to', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'mouse');
+      await page.goto('saturn/');
+      await drawn(page);
+      const box = (await page.locator('#view-a').boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.wheel(0, 400);
+      await settled(page);
+      await page.locator('#b-magneticField').click();
+      await expect(page.locator('#def-magneticField')).toBeVisible();
+      const previous = page.locator('.steps .step[data-step="-1"]');
+      for (let i = 0; i < 19; i++) {
+        await previous.click();
+        await settled(page);
+        expect(await stepperClear(page), `step ${i + 1}`).toEqual({ clear: true, opaque: true });
+      }
+      await expect(page.locator('#def-mass')).toBeVisible();
+    });
+  });
+}
+
+test('keys on the stepper step the rows, and Esc goes back to the row', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'keyboard');
+  await page.goto('saturn/#obliquity');
+  await expect(page.locator('#def-obliquity')).toBeVisible();
+  const next = page.locator('.steps .step[data-step="1"]');
+  await next.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#def-meanTemperature')).toBeVisible();
+  await expect(next).toBeFocused();
+  // ↓ ↑ step from here too; ← → leave the body alone.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('#def-surfacePressure')).toBeVisible();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('#def-obliquity')).toBeVisible();
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(300);
+  await expect(page).toHaveURL(/\/saturn\/#obliquity$/);
+  await expect(next).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(open(page)).toHaveCount(0);
+  await expect(page.locator('#b-obliquity')).toBeFocused();
+});
+
+test.describe('in a narrow window', () => {
+  test.use({ viewport: { width: 640, height: 800 } });
+  test('‹ › in the popover step the rows; focus moves on with them', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'keyboard');
+    await page.goto('saturn/#mass');
+    await expect(page.locator('#def-mass')).toBeVisible();
+    // No stepper above the table here: the popover has its own, before ×.
+    await expect(page.locator('.schedule > .steps')).toBeHidden();
+    await expect(page.locator('#def-mass .step[data-step="-1"]')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    await page.locator('#def-mass .step[data-step="1"]').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#def-diameter')).toBeVisible();
+    await expect(page.locator('#def-diameter .step[data-step="1"]')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('#def-gravity')).toBeVisible();
+    await expect(page.locator('#def-gravity .step[data-step="1"]')).toBeFocused();
+    await expect.poll(() => hash(page)).toBe('gravity');
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForTimeout(300);
+    await expect(page).toHaveURL(/\/saturn\/#gravity$/);
+    await page.keyboard.press('Escape');
+    await expect(open(page)).toHaveCount(0);
+    await expect(page.locator('#b-gravity')).toBeFocused();
+  });
 });
 
 test('a burst of ↓ ↑ keeps the address, the tabs and the popover right', async ({
@@ -839,6 +1248,55 @@ test('the tab strip scrolls with the wheel and shows where it hides tabs', async
   expect(await page.evaluate(() => scrollY)).toBe(0);
   await expect(nav).toHaveAttribute('data-more', 'right');
   await expect(page.locator('.tabs a[data-body="mercury"]')).toBeInViewport();
+});
+
+test('the strip marks a side only where a tab’s name is cut there', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'window sizes');
+  // Only the strip's and the tabs' padding off the screen: nothing hidden.
+  for (const [width, id] of [
+    [770, 'pluto'],
+    [862, 'mercury'],
+  ] as const) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`${id}/`);
+    await drawn(page);
+    await expect(page.locator('.tabs nav'), `${width}`).toHaveAttribute('data-more', '');
+  }
+});
+
+test('a tab that takes keyboard focus comes out from under the fade', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(isMobile, 'keyboard');
+  await page.setViewportSize({ width: 640, height: 800 });
+  await page.goto('saturn/');
+  await drawn(page);
+  const strip = page.locator('.tabs .strip');
+  expect(await strip.evaluate((s) => s.scrollLeft)).toBeGreaterThan(0);
+  await page.locator('.tabs a.home').focus();
+  await page.keyboard.press(browserName === 'webkit' ? 'Alt+Tab' : 'Tab');
+  const mercury = page.locator('.tabs a[data-body="mercury"]');
+  await expect(mercury).toBeFocused();
+  await expect.poll(() => strip.evaluate((s) => s.scrollLeft)).toBe(0);
+});
+
+test('phones: a tap on a tab near the end of the strip opens it', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'touch');
+  await page.goto('saturn/#obliquity');
+  await expect(page.locator('#def-obliquity')).toBeVisible();
+  // Neptune's tab runs under the strip's faded edge: the middle of the part on screen.
+  const [s, t] = [
+    await rect(page.locator('.tabs .strip')),
+    await rect(page.locator('.tabs a[data-body="neptune"]')),
+  ];
+  expect(t.right).toBeGreaterThan(s.right);
+  await page.touchscreen.tap(
+    (Math.max(t.left, s.left) + Math.min(t.right, s.right)) / 2,
+    (t.top + t.bottom) / 2,
+  );
+  await expect(page).toHaveURL(/\/neptune\/#obliquity$/);
 });
 
 test('captions of View A and the key plan share one baseline', async ({ page, isMobile }) => {
