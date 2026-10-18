@@ -1,39 +1,310 @@
-/* The home page: a schematic of the solar system filling the frame.
-   PLACEHOLDER from the restructuring; the home-page work replaces it (see the redesign spec, §2). */
+/* The home page: one moving drawing and four items in the frame's corners. The drawing fills the frame
+   less a band at the top (the title), one at the bottom (caption, date and Pause) and the side margins;
+   src/views/orrery.ts fits the orbits into what is left. */
 
 .sheet-home {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: calc(var(--vh) - 2 * var(--gap));
+  --band-t: 72px;
+  --band-b: 44px;
+  --band-x: 40px;
+  height: calc(var(--vh) - 2 * var(--gap));
 }
-.sheet-home .corner.tl {
-  padding: 14px 16px 0;
+@media (max-width: 860px) {
+  .sheet-home {
+    --band-t: 60px;
+    --band-b: 40px;
+    --band-x: 16px;
+  }
+}
+@media (max-height: 500px) {
+  .sheet-home {
+    --band-t: 44px;
+  }
+  .sheet-home .subtitle {
+    display: none;
+  }
+}
+
+/* ---- Corners ---------------------------------------------------------------------------------- */
+
+.sheet-home .corner {
+  position: absolute;
+  z-index: 3;
+  margin: 0;
+}
+.sheet-home .tl {
+  top: 10px;
+  left: 16px;
 }
 .sheet-home h1 {
   margin: 0;
+  line-height: 0;
+}
+/* The lettering's height is kept before the script letters it, so nothing moves when it does. */
+.sheet-home h1 svg {
+  display: block;
+  height: 30px;
+  overflow: visible;
 }
 .sheet-home .subtitle {
   margin: 4px 0 0;
   font-size: 12px;
+  line-height: 1.3;
   color: var(--ink-3-text);
 }
-.sheet-home button.info {
+.sheet-home > button.info {
   position: absolute;
-  top: 14px;
+  z-index: 3;
+  top: 12px;
   right: 16px;
 }
-.orrery {
-  position: relative;
-  min-height: 0;
+/* A finger gets 44 px round the 28 px button. */
+@media (pointer: coarse) {
+  .sheet-home > button.info::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
 }
-.orrery .bodies ol {
+.sheet-home .bl,
+.sheet-home .br {
+  bottom: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
-  justify-content: center;
-  margin: 0;
-  padding: 24px 16px;
-  list-style: none;
-  text-transform: uppercase;
+  align-items: center;
+  height: var(--band-b);
+}
+.sheet-home .bl {
+  left: 16px;
+}
+.sheet-home .br {
+  right: 16px;
+  gap: 12px;
+  font-size: 11px;
+  font-weight: 500;
   letter-spacing: 0.12em;
+  color: var(--ink-2);
+}
+.sheet-home #clock {
+  font-variant-numeric: tabular-nums;
+}
+.sheet-home #pause {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--paper);
+  border: var(--w-narrow) solid var(--ink-3);
+  padding: 4px 9px;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .sheet-home #pause:hover {
+    border-color: var(--ink);
+  }
+}
+@media (max-width: 860px) {
+  /* Room for the date and Pause on its right: on the narrowest phones the caption takes two lines. */
+  .sheet-home .bl {
+    max-width: calc(100% - 154px);
+    font-size: 10px;
+  }
+  .sheet-home .br {
+    font-size: 10px;
+  }
+  /* Pause as an icon, drawn from data-paused; the text stays for screen readers. */
+  .sheet-home #pause {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-indent: 200%;
+  }
+  .sheet-home #pause::before {
+    content: '';
+    position: absolute;
+    left: 11.5px;
+    top: 10px;
+    width: 3px;
+    height: 12px;
+    background: currentColor;
+    box-shadow: 6px 0 0 currentColor;
+  }
+  .sheet-home #pause[data-paused='true']::before {
+    left: 12px;
+    top: 9px;
+    width: 0;
+    height: 0;
+    background: none;
+    box-shadow: none;
+    border-left: 11px solid currentColor;
+    border-top: 7px solid transparent;
+    border-bottom: 7px solid transparent;
+  }
+}
+
+/* ---- The drawing and its links ------------------------------------------------------------------ */
+
+.js .orrery {
+  position: absolute;
+  inset: var(--band-t) var(--band-x) var(--band-b);
+}
+/* The links are the targets; the drawing under them only shows. */
+.js .orrery .drawing {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.orrery .orbits .layer-center .ln:not(.hot) {
+  stroke: var(--ink-3);
+}
+.js .orrery .bodies,
+.js .orrery .bodies ol {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+/* Circles over the bodies (OrreryView sizes and moves them), the Moon's ring under the planets. */
+.js .orrery .bodies a {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  border-radius: 50%;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.js .orrery .bodies a[data-body='moon'] {
+  z-index: 1;
+}
+/* With the script, names are lettered in the drawing and the text is for screen readers. */
+.js .orrery .bodies span,
+.js .sheet-home .title-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The touch chooser: the bodies within reach of a tap, as 44 px links. */
+.sheet-home .chooser {
+  position: fixed;
+  inset: auto;
+  width: 160px;
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  background: var(--paper);
+  border: var(--w-narrow) solid var(--ink-3);
+  border-top: 2px solid var(--hot);
+}
+.sheet-home .chooser a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.sheet-home .chooser a + a {
+  border-top: var(--w-narrow) solid var(--ink-4);
+}
+
+/* ---- Without JavaScript: the ten links as a list ------------------------------------------------ */
+
+html:not(.js) .sheet-home {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+}
+html:not(.js) .sheet-home .tl {
+  position: static;
+  padding: 10px 16px 0;
+}
+html:not(.js) .sheet-home .title-text {
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 30px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+html:not(.js) .sheet-home h1 svg,
+html:not(.js) .sheet-home .js-only,
+html:not(.js) .orrery .drawing {
+  display: none;
+}
+html:not(.js) .orrery {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px var(--band-b);
+}
+.sheet-home .noscript {
+  position: static;
+  margin: 0 0 20px;
+}
+html:not(.js) .orrery .bodies ol {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+html:not(.js) .orrery .bodies a {
+  display: block;
+  padding: 8px 16px;
+}
+
+/* ---- Open Graph card (?capture=og at 1200×630) ------------------------------------------------ */
+
+.sheet-home .og-only {
+  display: none;
+}
+.capture-og .sheet-home {
+  --band-t: 128px;
+  --band-b: 64px;
+}
+.capture-og .sheet-home .tl {
+  top: 22px;
+  left: 28px;
+}
+.capture-og .sheet-home h1 svg {
+  width: auto;
+  height: 54px;
+}
+.capture-og .sheet-home .subtitle {
+  margin-top: 10px;
+  font-size: 20px;
+  letter-spacing: 0.03em;
+  color: var(--ink-2);
+}
+.capture-og .sheet-home > button.info,
+.capture-og .sheet-home .bl,
+.capture-og .sheet-home .br {
+  display: none;
+}
+.capture-og .sheet-home .og-only {
+  display: block;
+  position: absolute;
+  left: 28px;
+  bottom: 24px;
+  width: auto;
+  height: 20px;
+  overflow: visible;
 }
