@@ -152,11 +152,31 @@ function alsoDrawn(id: BodyId, key: string): string {
             `<div><dt>${esc(ringName(e.name))}</dt><dd>${esc(e.text)}</dd><dd>${LINE[e.line]}</dd></div>`,
         )
         .join('');
+      // Each entry is kept whole and a line breaks only after a "·", as in the title line. A group of
+      // rows (Adams's arcs) is too long for that: it breaks only after a comma or its colon, so that
+      // every name keeps its number.
+      const entries = (all: string[]) =>
+        all
+          .map((s) =>
+            esc(s)
+              .split(/(?<=[,:]) /)
+              .map((w) => `<span class="nowrap">${w}</span>`)
+              .join(' '),
+          )
+          .join('&nbsp;· ');
       const lists = [
-        list.omitted.length ? `Not drawn: ${list.omitted.map(esc).join(' · ')}.` : '',
-        list.beyond.length ? `Not drawn at this scale: ${list.beyond.map(esc).join(' · ')}.` : '',
+        list.omitted.length ? `Not drawn: ${entries(list.omitted)}.` : '',
+        list.beyond.length ? `Not drawn at this scale: ${entries(list.beyond)}.` : '',
       ].filter(Boolean);
-      const notes = rings.notes.length ? `<p class="n">${rings.notes.map(esc).join(' ')}</p>` : '';
+      // NASA's notes in one paragraph where they are sentences; a note that is not one (Neptune's
+      // parenthesis) stands apart, so that it does not run into the next.
+      const sentence = (s: string | undefined) => !!s && /[.!?]$/.test(s);
+      const paras: string[] = [];
+      rings.notes.forEach((n, i) => {
+        if (sentence(rings.notes[i - 1]) && sentence(n)) paras[paras.length - 1] += ` ${esc(n)}`;
+        else paras.push(esc(n));
+      });
+      const notes = paras.map((p) => `<p class="n">${p}</p>`).join('');
       return section(
         `${esc(page.name)} rings fact sheet <time>${isoDate(rings.lastUpdated)}</time>`,
         `<p class="k">Ring edges drawn <span class="unit">(km)</span></p><dl class="edges">${edges}</dl>${lists.length ? `<p>${lists.join(' ')}</p>` : ''}<p>Wide = opaque rings, narrow = fainter, phantom = optical depth under about 0.01.</p>${notes}`,
@@ -280,7 +300,8 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
   const name = b.name;
   const plan = keyPlanModel(id);
   const earth = body('earth');
-  const out = (href: string, text: string) => `<a href="${href}">${text} ↗</a>`;
+  // The arrow is bound to the word before it, so that it never starts a line.
+  const out = (href: string, text: string) => `<a href="${href}">${text}&nbsp;↗</a>`;
   const notes = [
     'DIMENSIONS IN km; ORBITS IN 10⁶ km; ANGLES IN DEGREES.',
     'EACH LINE IS SIZED BY THE VALUE PRINTED ON IT. ( ) = REFERENCE DIMENSION; A WORKED-OUT VALUE SHOWS ITS FORMULA.',
@@ -325,7 +346,7 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
   const li = (s: string) => `<li>${s}</li>`;
   // .pointer and .touch follow the input (body.css); what needs the script is .js-only.
   const act = '<span class="pointer">Click</span><span class="touch">Tap</span>';
-  return `<p><a href="${ctx.base}">☉ Planetary</a>: the solar system, moving. NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>
+  return `<p><a href="${ctx.base}"><span class="sun">☉</span> Planetary</a>: the solar system, moving. NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>
       <h3>Reading this sheet</h3>
       <ul>
         <li class="js-only">${act} a row, or a line in the drawing, for NASA’s definition; what it measures turns yellow.</li>
@@ -333,7 +354,7 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
         <li class="js-only">While a definition is open, <span class="pointer">↑ ↓ or </span>‹ › <span class="steps-above">above the table</span><span class="steps-in">in the definition</span> step through the rows.</li>
         <li class="js-only">Rows marked ⊢⊣ are drawn. Drag view A to turn it; <span class="pointer">double-click</span><span class="touch">double-tap</span> to reset. Spin: 1 s = 1 h.</li>
         <li class="js-only">Tabs<span class="pointer"> and ← →</span> switch bodies and keep the selected row.</li>
-        <li>PLANETARY at the top left (☉ on a phone or a small window) returns to the solar system.</li>
+        <li>PLANETARY at the top left (<span class="sun">☉</span> on a phone or a small window) returns to the solar system.</li>
       </ul>
       <h3>General notes</h3>
       <ol class="drafting">${notes.map((n) => li(esc(n))).join('')}</ol>

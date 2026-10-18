@@ -177,6 +177,8 @@ export class OrreryView extends View {
   /** Radius (px) of the outermost aphelion, and of the Moon's ring. */
   private R = 1;
   private rho = 0;
+  /** A pointer that hovers and is fine (a mouse, a trackpad): it finds the bodies by their links. */
+  private readonly mouse = matchMedia('(hover: hover) and (pointer: fine)');
   private resized = true;
   /** The clock, as a Julian date, and its speed: 1 runs, 0 stands. */
   private jd: number;
@@ -233,6 +235,9 @@ export class OrreryView extends View {
     // The first frame at once, so the page never shows an empty drawing or links out of place.
     this.layout();
     this.place();
+    // A tablet that takes up a trackpad, or a laptop folded into a tablet, changes its pointer and not
+    // its size: the ring follows.
+    this.mouse.addEventListener('change', () => this.measure());
   }
 
   protected extent() {
@@ -275,9 +280,14 @@ export class OrreryView extends View {
     this.ox = (this.w - (x1 - x0) * R) / 2 - x0 * R;
     this.oy = (this.h - (y1 - y0) * R) / 2 + y1 * R;
     for (const p of this.planets) p.r = symbolDiameter(p.m.diameter, R, this.model.dMax) / 2;
-    // The ring lies wholly outside the Earth's link, so every part of it opens the Moon.
+    // The ring's radius is the Earth's symbol's diameter and 6 px. A mouse finds the bodies by their
+    // links, so there the ring also lies wholly outside the Earth's link and every part of it opens
+    // the Moon. A finger takes whatever is within its reach (within()), and a larger ring would only
+    // take in more of the Earth's neighbours.
     const earth = this.planet('earth')?.r ?? 0;
-    this.rho = Math.max(2 * earth + 6, (Math.floor(Math.max(earth + 6, 12)) + 3) / Math.sin(pitch));
+    this.rho = 2 * earth + 6;
+    if (this.mouse.matches)
+      this.rho = Math.max(this.rho, (Math.floor(Math.max(earth + 6, 12)) + 3) / Math.sin(pitch));
     // The Moon's link is the ring's ellipse, MOON_LINK px wider all round, under the Earth's.
     const moon = this.links.get('moon');
     if (moon) {
@@ -497,7 +507,13 @@ export class OrreryView extends View {
           ...reqs.filter((r) => !meets(labels.boxFor(r, r.spots![0]!), tip)),
         ];
       }
-      labels.placeAny(dl, reqs);
+      const name = labels.placeAny(dl, reqs);
+      // Where the name under a finger still meets its orbit (near the top of a phone on its side
+      // nothing is clear), the orbit gives way 2 px round the letters, as lines do under the sheets'
+      // lettering. Not near a symbol, which stays whole: its pen reaches 2 px past its box.
+      const symbols = others.concat(shift(p.box, p.at));
+      if (this.touchAt && labels.onInk(name) > 0 && !symbols.some((o) => meets(o, grow(name, 4))))
+        labels.mask(dl, corners(name), 2);
     }
     this.scene.commit(dl);
   }
@@ -560,15 +576,17 @@ export class OrreryView extends View {
 
   /**
    * Bodies within reach of a tap at (x, y) px, in NASA's order: a planet within max(r + 8, 22) px of
-   * its centre, the Moon within max(ρ + 4, 22) px of the Earth's.
+   * its centre; the Moon within 22 px of the Earth's, or inside its ring as drawn, 4 px larger.
    */
   within(x: number, y: number): string[] {
-    const near = (p: Planet | undefined, reach: number) =>
-      !!p && Math.hypot(p.at[0] - x, p.at[1] - y) <= reach;
+    const ring = this.moonBox();
     return [...this.links.keys()].filter((id) => {
-      if (id === 'moon') return near(this.planet('earth'), Math.max(this.rho + 4, 22));
-      const p = this.planet(id);
-      return near(p, Math.max((p?.r ?? 0) + 8, 22));
+      const p = this.planet(id === 'moon' ? 'earth' : id);
+      if (!p) return false;
+      const dx = x - p.at[0],
+        dy = y - p.at[1];
+      if (id !== 'moon') return Math.hypot(dx, dy) <= Math.max(p.r + 8, 22);
+      return Math.hypot(dx, dy) <= 22 || (dx / (ring.x1 + 4)) ** 2 + (dy / (ring.y1 + 4)) ** 2 <= 1;
     });
   }
 
@@ -611,6 +629,20 @@ function union(a: Box, b: Box): Box {
 
 function shift(b: Box, d: Vec2): Box {
   return { x0: b.x0 + d[0], y0: b.y0 + d[1], x1: b.x1 + d[0], y1: b.y1 + d[1] };
+}
+
+function grow(b: Box, d: number): Box {
+  return { x0: b.x0 - d, y0: b.y0 - d, x1: b.x1 + d, y1: b.y1 + d };
+}
+
+/** A box's corners, clockwise from the top left. */
+function corners(b: Box): Vec2[] {
+  return [
+    [b.x0, b.y0],
+    [b.x1, b.y0],
+    [b.x1, b.y1],
+    [b.x0, b.y1],
+  ];
 }
 
 /** Whether two boxes overlap (touching is not overlapping). */

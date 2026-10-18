@@ -11,7 +11,7 @@ Unofficial: not affiliated with or endorsed by NASA.
 [Uranus](https://eduardmur.github.io/planetary/uranus/#magneticField) ·
 [Pluto](https://eduardmur.github.io/planetary/pluto/#orbitalInclination)
 
-![The home page: a schematic of the solar system, the planets moving on their orbits at one minute to the year](docs/media/orrery.gif)
+![The home page: a schematic of the solar system, the planets going round their orbits through one year, sped up](docs/media/orrery.gif)
 
 The home page is a schematic of the solar system. The planets move on their orbits at 1 minute = 1
 year, starting from today's positions. Point at one to see its name; click it to open its sheet. Each of

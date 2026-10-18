@@ -230,6 +230,14 @@ button.info {
 .info-body li {
   margin: 0 0 4px;
 }
+.info-body .sources a,
+.info-body p a {
+  white-space: nowrap;
+}
+/* A long link wraps; the part of it that must stay whole is marked. */
+.info-body p a:has(.nowrap) {
+  white-space: normal;
+}
 /* The open dialog stops the page scrolling; where the page had a scrollbar (src/main.ts), its gutter
    stays, so nothing behind the dialog moves. */
 html:has(dialog[open]) {

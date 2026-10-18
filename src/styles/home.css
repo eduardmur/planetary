@@ -206,10 +206,12 @@
   -webkit-tap-highlight-color: transparent;
 }
 .js .orrery .bodies a[data-body='moon'] {
-  z-index: 1;
+  z-index: 0;
 }
-/* A link cut where it meets another (OrreryView) shows its whole focus ring. */
+/* A link cut where it meets another (OrreryView) shows its whole focus ring. It goes under the other
+   planets' links (still over the Moon's), so that each of them keeps the mouse over its own symbol. */
 .js .orrery .bodies a:focus-visible {
+  z-index: 1;
   clip-path: none !important;
 }
 /* With the script, names are lettered in the drawing and the text is for screen readers. */

@@ -45,6 +45,29 @@ const at = (page: Page, id: string) =>
 
 const days = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 86_400_000;
 
+/** The links that points of a body's symbol open, where no other symbol covers them. */
+const symbolHits = (page: Page, id: string) =>
+  page.evaluate((id) => {
+    const o = (window as unknown as Hooks).__pb.views.orrery;
+    const box = document.getElementById('orrery')!.getBoundingClientRect();
+    const pos = o.positions(),
+      rad = o.glyphRadii();
+    const hits = new Set<string | undefined>();
+    for (const f of [0.3, 0.6, 0.9])
+      for (let k = 0; k < 16; k++) {
+        const t = (k / 16) * 2 * Math.PI;
+        const x = pos[id]![0] + Math.cos(t) * f * rad[id]!,
+          y = pos[id]![1] + Math.sin(t) * f * rad[id]!;
+        const covered = Object.keys(pos).some(
+          (j) => j !== id && Math.hypot(x - pos[j]![0], y - pos[j]![1]) < rad[j]! + 0.5,
+        );
+        if (covered) continue;
+        const a = document.elementFromPoint(box.x + x, box.y + y)?.closest<HTMLElement>('a');
+        hits.add(a?.dataset.body);
+      }
+    return [...hits];
+  }, id);
+
 test('the home page draws the schematic and nothing else', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -153,20 +176,31 @@ test('every point of a symbol opens its own body; no two links overlap or shrink
   ).toBe('earth');
 });
 
-test('a link cut where it meets another shows its whole focus ring', async ({
+test('a link cut where it meets another shows its whole focus ring, under its neighbours', async ({
   page,
   isMobile,
   browserName,
 }) => {
   test.skip(isMobile, 'keyboard');
+  const tab = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
   // 1440×900 on 2026-10-18: the Earth's link is cut where it meets Venus's.
   await page.goto('?capture&date=2026-10-18');
   const earth = page.locator('a[data-body="earth"]');
   expect(await earth.evaluate((a) => a.style.clipPath)).toMatch(/^polygon/);
   await page.locator('a[data-body="venus"]').focus();
-  await page.keyboard.press(browserName === 'webkit' ? 'Alt+Tab' : 'Tab');
+  await page.keyboard.press(tab);
   await expect(earth).toBeFocused();
   expect(await earth.evaluate((a) => getComputedStyle(a).clipPath)).toBe('none');
+  // Venus keeps its symbol, and the Moon's link stays under the Earth's.
+  expect(await symbolHits(page, 'venus')).toEqual(['venus']);
+  expect(await symbolHits(page, 'earth')).toEqual(['earth']);
+  // 1280×720 on 2027-04-04, Mercury in front of Venus: with Venus focused, Mercury keeps its symbol.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('?capture&date=2027-04-04');
+  await page.locator('a[data-body="mercury"]').focus();
+  await page.keyboard.press(tab);
+  await expect(page.locator('a[data-body="venus"]')).toBeFocused();
+  expect(await symbolHits(page, 'mercury')).toEqual(['mercury']);
 });
 
 test('at 2060 the clock goes back to today, fading the bodies out and in', async ({ page }) => {
@@ -421,6 +455,75 @@ test('a tap among several bodies opens a chooser; a tap on one opens its page', 
   await expect(page).toHaveURL(/\/jupiter\/$/);
 });
 
+test('on a phone on its side, a tap on Venus beside the Earth opens Venus, not a chooser', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'touch');
+  // 750×342 on 2027-02-04: Venus 27 px from the Earth, clear of the Moon's ring (it took Venus in
+  // when the ring was drawn as large as it is for a mouse).
+  await page.setViewportSize({ width: 750, height: 342 });
+  await page.goto('?capture&date=2027-02-04');
+  const venus = await at(page, 'venus');
+  await page.touchscreen.tap(venus.x, venus.y);
+  await expect(page).toHaveURL(/\/venus\/$/);
+});
+
+test('with a mouse, the Moon’s ring lies outside the Earth’s link', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'mouse');
+  for (const size of [
+    { width: 1440, height: 900 },
+    { width: 1280, height: 720 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.goto('?capture&date=2026-10-18');
+    // The link that each of 72 points along the ring opens.
+    const hits = await page.evaluate(() => {
+      const ring = document.querySelector<SVGPathElement>('#orrery [data-ref="moon"]')!;
+      const m = ring.getScreenCTM()!;
+      const n = ring.getTotalLength();
+      return Array.from({ length: 72 }, (_, k) => {
+        const p = ring.getPointAtLength((k / 72) * n).matrixTransform(m);
+        return document.elementFromPoint(p.x, p.y)?.closest<HTMLElement>('a[data-body]')?.dataset
+          .body;
+      });
+    });
+    const wh = `${size.width}×${size.height}`;
+    // Venus's link lies over part of it on this date; the rest is the Moon's.
+    expect(hits.filter((b) => b === 'moon').length, wh).toBeGreaterThan(36);
+    expect(hits, wh).not.toContain('earth');
+  }
+});
+
+test('a pointer that changes without a resize changes the Moon’s ring', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(
+    isMobile || browserName !== 'chromium',
+    'touch is turned on through the DevTools protocol',
+  );
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('?capture&date=2026-10-18');
+  const width = () =>
+    page
+      .locator('#orrery [data-ref="moon"]')
+      .evaluate((p: SVGGraphicsElement) => p.getBBox().width);
+  const mouse = await width();
+  const earth = await page.evaluate(
+    () => (window as unknown as Hooks).__pb.views.orrery.glyphRadii().earth!,
+  );
+  // A finger's ring: its radius is the Earth's symbol's diameter and 6 px.
+  const finger = 2 * (2 * earth + 6);
+  expect(mouse).toBeGreaterThan(finger + 1);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  await expect.poll(width).toBeCloseTo(finger, 0);
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+  await expect.poll(width).toBeCloseTo(mouse, 0);
+});
+
 test('a finger held on a body sees its name clear of the fingertip', async ({
   page,
   isMobile,
@@ -482,6 +585,48 @@ test('a finger held on a body sees its name clear of the fingertip', async ({
   });
   expect(Object.keys(near).length).toBeGreaterThan(4);
   for (const [id, d] of Object.entries(near)) expect(d, id).toBeGreaterThanOrEqual(28);
+});
+
+test('a name beside a finger, along its own orbit, interrupts the orbit', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'touch');
+  // 664×390 on 2033-06-23: Uranus at the top, nothing above the finger is clear, and its orbit runs
+  // beside the finger, where the name goes.
+  await page.setViewportSize({ width: 664, height: 390 });
+  await page.goto('?capture&date=2033-06-23');
+  const { named, masked } = await page.evaluate(async () => {
+    const svg = document.getElementById('orrery')!;
+    const box = svg.getBoundingClientRect();
+    const [x, y] = (window as unknown as Hooks).__pb.views.orrery.positions().uranus!;
+    svg.closest('.orrery')!.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerType: 'touch',
+        clientX: box.x + x,
+        clientY: box.y + y,
+        bubbles: true,
+      }),
+    );
+    const at = (layer: string) =>
+      svg.querySelector<SVGPathElement>(`:scope > .layer-${layer} path[d]:not([d=""])`)?.getBBox();
+    for (let i = 0; i < 60 && !at('text-l'); i++) await new Promise(requestAnimationFrame);
+    const name = at('text-l'),
+      mask = at('mask');
+    return {
+      named: !!name,
+      // The orbit gives way all round the letters.
+      masked:
+        !!name &&
+        !!mask &&
+        mask.x < name.x &&
+        mask.y < name.y &&
+        mask.x + mask.width > name.x + name.width &&
+        mask.y + mask.height > name.y + name.height,
+    };
+  });
+  expect(named).toBe(true);
+  expect(masked).toBe(true);
 });
 
 test('turning the phone closes the chooser', async ({ page, isMobile }) => {
@@ -616,4 +761,45 @@ test('"?" opens the notes; Esc and a click outside close them', async ({ page, i
   await expect(dialog).toBeVisible();
   await page.mouse.click(8, 8);
   await expect(dialog).toBeHidden();
+});
+
+test('the dialog’s data links break only after a "·", and the long one before its count', async ({
+  page,
+}) => {
+  await page.goto('');
+  await page.locator('button.info').click();
+  await expect(page.locator('dialog#info')).toBeVisible();
+  for (const width of [320, 360, 390, 414, 1440]) {
+    await page.setViewportSize({ width, height: 760 });
+    // How each line of the paragraph but the last ends.
+    const ends = await page.evaluate(() => {
+      const h = [...document.querySelectorAll('#info h3')].find(
+        (h) => h.textContent === 'Data and code',
+      )!;
+      const range = document.createRange();
+      const out: string[] = [];
+      let line = '';
+      let mid = -Infinity;
+      const walker = document.createTreeWalker(h.nextElementSibling!, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const text = n.textContent ?? '';
+        for (let i = 0; i < text.length; i++) {
+          range.setStart(n, i);
+          range.setEnd(n, i + 1);
+          const r = range.getBoundingClientRect();
+          if (r.height && !/\s/.test(text[i]!)) {
+            const m = (r.top + r.bottom) / 2;
+            if (m > mid + 6 && line) {
+              out.push(line.trim());
+              line = '';
+            }
+            mid = m;
+          }
+          line += text[i];
+        }
+      }
+      return out;
+    });
+    for (const end of ends) expect(end, `${width}`).toMatch(/(·|disagree)$/);
+  }
 });
