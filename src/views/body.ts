@@ -594,7 +594,9 @@ export class BodyView extends View {
         text: rotText,
         ref: 'rotationPeriod',
         gap: 6,
-        reach: [2, 3],
+        // On a leader, as far as beyond the obliquity's arc: a leader may cross a line, which is
+        // better than a line interrupted under the period.
+        reach: [2, 3, 4, 5],
         mask: true,
       })),
     );
@@ -1000,11 +1002,11 @@ export class BodyView extends View {
     let g = this.dipoleGeometry(axis, L, onDimSide);
     if (g) {
       // Pull the arc in toward the outline, then the line's end, a pixel at a time, until both
-      // keep 3 px off every label.
+      // keep 3 px off every label (the arc's arrowheads too, and any mask round a label).
       const step = 1 / this.k;
       let r = L.c + 0.06,
         neg = L.axisNeg;
-      while (r > L.c + 2.5 * step && room(g!.arc) < 3)
+      while (r > L.c + 2.5 * step && room(g!.arc) < 3 + ARROW.half + 2)
         g = this.dipoleGeometry(axis, L, onDimSide, (r -= step), neg);
       while (neg > r + 2 * step && room([c0, g!.a]) < 3)
         g = this.dipoleGeometry(axis, L, onDimSide, r, (neg -= step));
