@@ -162,6 +162,19 @@ test('×, Esc, a second click and blank paper each close it', async ({ page }) =
   await closed();
 });
 
+test('Pause and the "?" dialog leave the selection alone', async ({ page }) => {
+  await page.goto('saturn/#obliquity');
+  await expect(page.locator('#def-obliquity')).toBeVisible();
+  await page.locator('#pause').click();
+  await page.locator('button.info').click();
+  await expect(page.locator('dialog#info')).toBeVisible();
+  // Esc closes the dialog only.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('dialog#info')).toBeHidden();
+  await expect(page.locator('#def-obliquity')).toBeVisible();
+  expect(await hash(page)).toBe('obliquity');
+});
+
 test('dragging View A keeps the selection', async ({ page, isMobile }) => {
   test.skip(isMobile, 'mouse drag');
   await page.goto('saturn/#obliquity');

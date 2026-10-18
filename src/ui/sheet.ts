@@ -227,7 +227,9 @@ export function initSheet(data: PageData) {
     return null;
   }
 
-  document.addEventListener('click', (e) => {
+  // On the sheet rather than the document: iOS Safari sends taps on plain paper only to listeners
+  // below <body>.
+  document.querySelector<HTMLElement>('main.sheet')?.addEventListener('click', (e) => {
     const t = e.target as Element;
     const drawing = t.closest<SVGSVGElement>('svg.drawing');
     if (drawing) {
@@ -300,14 +302,18 @@ export function initSheet(data: PageData) {
   select(hashKey(), { instant: true });
   window.addEventListener('hashchange', () => select(hashKey(), { instant: true }));
 
-  // Where the tab strip scrolls (phones, narrow windows), start with this body's tab in the middle.
+  // Where the tab strip scrolls (phones, narrow windows), start with this body's tab in the middle,
+  // and again once the lettering's font has narrowed the tabs.
   const strip = document.querySelector<HTMLElement>('.tabs .strip');
   const here = strip?.querySelector<HTMLElement>('[aria-current="page"]');
-  if (strip && here) {
+  const centre = () => {
+    if (!strip || !here) return;
     const s = strip.getBoundingClientRect(),
       h = here.getBoundingClientRect();
     strip.scrollLeft += h.left + h.width / 2 - (s.left + s.width / 2);
-  }
+  };
+  centre();
+  void document.fonts.ready.then(centre);
 
   expose({ show: (key: string | null) => select(key) });
 }

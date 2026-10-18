@@ -766,10 +766,10 @@ html:not(.js) .sheet-body .views {
 html:not(.js) .sheet-body .view {
   display: none;
 }
-html:not(.js) .tabs .home svg {
+html:not(.js) .sheet-body .tabs .home svg {
   display: none;
 }
-html:not(.js) .tabs .home::before {
+html:not(.js) .sheet-body .tabs .home::before {
   content: 'Planetary';
   content: 'Planetary' / '';
   font-size: 12px;
@@ -778,7 +778,7 @@ html:not(.js) .tabs .home::before {
   text-transform: uppercase;
 }
 @media (max-width: 860px) {
-  html:not(.js) .tabs .home::before {
+  html:not(.js) .sheet-body .tabs .home::before {
     content: none;
   }
 }
