@@ -3,7 +3,12 @@
 
 import { expect, test } from '@playwright/test';
 
-// Chromium with classic scrollbars that take their width, as on Windows.
+// Chromium with classic scrollbars that take their width, as on Windows. The skip comes before the
+// launch: WebKit on Linux refuses Chromium's flags.
+test.skip(
+  ({ browserName, isMobile }) => browserName !== 'chromium' || isMobile,
+  'classic scrollbars: desktop Chromium',
+);
 test.use({
   launchOptions: {
     ignoreDefaultArgs: ['--hide-scrollbars'],
@@ -11,8 +16,7 @@ test.use({
   },
 });
 
-test('opening "?" moves nothing behind the dialog', async ({ page, browserName, isMobile }) => {
-  test.skip(browserName !== 'chromium' || isMobile, 'classic scrollbars: desktop Chromium');
+test('opening "?" moves nothing behind the dialog', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 625 });
   await page.goto('saturn/');
   await expect.poll(() => page.locator('#view-a path[d]:not([d=""])').count()).toBeGreaterThan(8);
