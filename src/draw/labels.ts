@@ -5,8 +5,10 @@
 //
 // Where nothing is clear, a label may move further out on a leader, and as a last resort the lines
 // under it give way (ISO 128 and 129-1: lettering is never crossed by a line; the line is interrupted).
+// Marks and outlines never give way: a place whose mask would hide one, whose leader would cross
+// another label, or that runs out of the drawing is taken only when there is no other.
 
-import { dimText } from './dims.ts';
+import { dimText, dimTurn, segSegDist } from './dims.ts';
 import { CAP, letter, measure, type TextSize } from './lettering.ts';
 import type { DrawList } from './svg.ts';
 import type { Vec2 } from './vec.ts';
@@ -68,7 +70,13 @@ interface Cand {
   box: Box;
   cost: number;
   leader?: [Vec2, Vec2];
+  /** A last resort: see unfit(). */
+  bad?: boolean;
 }
+
+/** Whether place a is better than place b: any fit place before an unfit one, then the cheaper. */
+const better = (a: { cost: number; bad?: boolean }, b: { cost: number; bad?: boolean } | null) =>
+  !b || (!!a.bad !== !!b.bad ? !a.bad : a.cost < b.cost - 1e-6);
 
 /** A drawn line: labels keep `pad` px off it, and mind it by `w`. */
 interface Seg {
@@ -78,6 +86,8 @@ interface Seg {
   b: Vec2;
   pad: number;
   w: number;
+  /** An outline, which no mask may interrupt (see Box.hard). */
+  hard: boolean;
   live: boolean;
 }
 
@@ -108,32 +118,26 @@ export function textBox(text: string, size: TextSize = 'm'): { w: number; h: num
   return { w: measure(text) * h, h: h * 1.35 };
 }
 
-/** How dimText() turns and lifts a value on a line along `dir`: its angle (radians, clockwise on the
- *  page), the text's "up" and the distance from the line to the middle of its capitals. */
-function dimTurn(dir: Vec2, size: TextSize) {
-  let deg = (Math.atan2(dir[1], dir[0]) * 180) / Math.PI;
-  if (deg > 60) deg -= 180;
-  if (deg <= -120) deg += 180;
-  const ang = (deg * Math.PI) / 180;
-  const up: Vec2 = [Math.sin(ang), -Math.cos(ang)];
-  return { ang, up, lift: CAP[size] / 2 + 3 };
-}
-
 const SPOTS: Spot[] = ['r', 'tr', 'br', 'l', 'tl', 'bl', 't', 'b'];
 
-/** Clear space kept between two labels, px. */
+/** Clear space kept between two labels, px: above and below each other, and side by side, where
+ *  less than two word spaces would let them read as one. */
 const GAP = 5;
+const GAP_X = 11;
 /** A leader may touch what it points at: its first few pixels are not counted against it. */
 const LEADER_FREE = 4;
 /** Cell size of the index of lines, px. */
 const CELL = 24;
-/** How far round a label the lines give way, where they must: past the reach of a pen stroke. */
-const MASK = 2;
+/** How far round a label the lines give way, where they must: past the reach of a pen stroke, and of
+ *  the strokes that reach past the lettering's advance (°). */
+export const MASK = 2.5;
+/** How much more a label minds a mark, an outline or another label than other ink. */
+const HARD = 100;
 
-const grow = (b: Box, d: number): Box => ({
-  x0: b.x0 - d,
+const grow = (b: Box, d: number, dx = d): Box => ({
+  x0: b.x0 - dx,
   y0: b.y0 - d,
-  x1: b.x1 + d,
+  x1: b.x1 + dx,
   y1: b.y1 + d,
 });
 
@@ -166,9 +170,26 @@ function clipLength(a: Vec2, b: Vec2, x0: number, y0: number, x1: number, y1: nu
   return (t1 - t0) * Math.hypot(dx, dy);
 }
 
-/** How much of a line's band (its clearance either side) a box covers, about in px². */
+/** How much of a line's band (its clearance either side) a box covers, about in px²; an outline
+ *  counts as much as a mark. */
 const bandIn = (s: Seg, b: Box) =>
-  clipLength(s.a, s.b, b.x0 - s.pad, b.y0 - s.pad, b.x1 + s.pad, b.y1 + s.pad) * 2 * s.pad * s.w;
+  clipLength(s.a, s.b, b.x0 - s.pad, b.y0 - s.pad, b.x1 + s.pad, b.y1 + s.pad) *
+  2 *
+  s.pad *
+  s.w *
+  (s.hard ? HARD : 1);
+
+/** A rectangle less another: the parts of r outside h (up to four). They overlap, so that no seam
+ *  between two patches of paper lets a line show through. */
+function cut(r: Box, h: Box): Box[] {
+  if (overlap(r, h) <= 0) return [r];
+  const out: Box[] = [];
+  if (h.y0 > r.y0) out.push({ x0: r.x0, y0: r.y0, x1: r.x1, y1: h.y0 });
+  if (h.y1 < r.y1) out.push({ x0: r.x0, y0: h.y1, x1: r.x1, y1: r.y1 });
+  if (h.x0 > r.x0) out.push({ x0: r.x0, y0: r.y0, x1: h.x0, y1: r.y1 });
+  if (h.x1 < r.x1) out.push({ x0: h.x1, y0: r.y0, x1: r.x1, y1: r.y1 });
+  return out;
+}
 
 export class LabelPlacer {
   readonly placed: Box[] = [];
@@ -191,14 +212,15 @@ export class LabelPlacer {
     this.placed.push(b);
   }
 
-  /** Keep labels `pad` px off a drawn polyline, minding it by `w`. (Lines are kept whole: no step is
-   *  needed any more, and `_step` is only for callers that still give one.) */
-  line(pts: readonly (readonly [number, number])[], pad = 2.5, _step = 6, w = 1) {
+  /** Keep labels `pad` px off a drawn polyline, minding it by `w`; a `hard` one, an outline, no mask
+   *  may interrupt. (Lines are kept whole: no step is needed any more, and `_step` is only for
+   *  callers that still give one.) */
+  line(pts: readonly (readonly [number, number])[], pad = 2.5, _step = 6, w = 1, hard = false) {
     for (let i = 1; i < pts.length; i++) {
       const a: Vec2 = [pts[i - 1]![0], pts[i - 1]![1]],
         b: Vec2 = [pts[i]![0], pts[i]![1]];
       const k = this.lines.length;
-      this.lines.push({ i: k, a, b, pad, w, live: true });
+      this.lines.push({ i: k, a, b, pad, w, hard, live: true });
       const cx0 = Math.floor((Math.min(a[0], b[0]) - pad) / CELL),
         cx1 = Math.floor((Math.max(a[0], b[0]) + pad) / CELL),
         cy0 = Math.floor((Math.min(a[1], b[1]) - pad) / CELL),
@@ -267,7 +289,8 @@ export class LabelPlacer {
    *  past the lettering's advance (°) or below its line (parentheses). */
   cost(box: Box): number {
     let cost = 0;
-    for (const p of this.placed) cost += overlap(grow(box, GAP), p) * 4;
+    for (const p of this.placed)
+      cost += overlap(grow(box, GAP, GAP_X), p) * 4 + overlap(box, p) * HARD;
     return cost + this.onInk(box, true) + this.outside(box);
   }
 
@@ -277,7 +300,7 @@ export class LabelPlacer {
     let cost = 0;
     const ink = grow(box, 1);
     for (const o of this.obstacles)
-      if (soft || !o.soft) cost += overlap(ink, o) * (o.w ?? 1) * (o.hard ? 100 : 1);
+      if (soft || !o.soft) cost += overlap(ink, o) * (o.w ?? 1) * (o.hard ? HARD : 1);
     for (const s of this.near(ink)) cost += bandIn(s, ink);
     return cost;
   }
@@ -303,7 +326,8 @@ export class LabelPlacer {
   costTurned(cx: number, cy: number, ang: number, w: number, h: number, margin = 1.5): number {
     const box = turnedBox(cx, cy, ang, w, h, margin);
     let cost = this.onInkTurned(cx, cy, ang, w, h, margin, true);
-    for (const p of this.placed) cost += overlap(grow(box, GAP), p) * 4;
+    for (const p of this.placed)
+      cost += overlap(grow(box, GAP, GAP_X), p) * 4 + overlap(box, p) * HARD;
     return cost + this.outside(box);
   }
 
@@ -340,7 +364,7 @@ export class LabelPlacer {
         rv = rx * as + ry * ac;
       const du = Math.min(hw + ru - Math.abs(u), 2 * ru, 2 * hw),
         dv = Math.min(hh + rv - Math.abs(v), 2 * rv, 2 * hh);
-      if (du > 0 && dv > 0) cost += du * dv * (o.w ?? 1);
+      if (du > 0 && dv > 0) cost += du * dv * (o.w ?? 1) * (o.hard ? HARD : 1);
     }
     for (const g of this.near(box)) {
       const len = clipLength(
@@ -351,20 +375,76 @@ export class LabelPlacer {
         hw + g.pad,
         hh + g.pad,
       );
-      cost += len * 2 * g.pad * g.w;
+      cost += len * 2 * g.pad * g.w * (g.hard ? HARD : 1);
     }
     return cost;
+  }
+
+  /** The marks and outlines that paper over the rectangle r of a label's frame (centred at c and
+   *  turned by `ang`, y down) would hide, as boxes in that frame. */
+  private hardUnder(c: Vec2, ang: number, r: Box): Box[] {
+    const { local, page } = frame(c, ang);
+    const out: Box[] = [];
+    for (const o of this.obstacles)
+      if (o.hard) {
+        const b = bbox(corners(o).map(local));
+        if (overlap(b, r) > 0) out.push(b);
+      }
+    // An outline's stroke reaches a pixel either side of it.
+    for (const s of this.near(grow(bbox(corners(r).map(page)), 1)))
+      if (s.hard) {
+        const a = local(s.a),
+          b = local(s.b);
+        if (clipLength(a, b, r.x0 - 1, r.y0 - 1, r.x1 + 1, r.y1 + 1) > 0) out.push(bbox([a, b], 1));
+      }
+    return out;
+  }
+
+  /** Whether a line crosses the rectangle r of a label's frame (see hardUnder()). */
+  private crosses(c: Vec2, ang: number, r: Box): boolean {
+    const { local, page } = frame(c, ang);
+    return this.near(bbox(corners(r).map(page))).some(
+      (s) => clipLength(local(s.a), local(s.b), r.x0, r.y0, r.x1, r.y1) > 0,
+    );
+  }
+
+  /** Interrupt the lines under a label: paper over the rectangle r of its frame (see hardUnder()),
+   *  cut round any mark or outline there, which no mask covers. */
+  private maskIn(dl: DrawList, c: Vec2, ang: number, r: Box) {
+    let parts = [r];
+    for (const h of this.hardUnder(c, ang, r)) parts = parts.flatMap((p) => cut(p, h));
+    const { page } = frame(c, ang);
+    for (const p of parts) dl.fill(corners(p).map(page), '', 'mask');
+  }
+
+  /** Whether a place is a last resort: it is too near another label or out of the drawing, its
+   *  leader would pass through another label or within a mask's width of it, or its mask would hide
+   *  a mark or an outline. */
+  private unfit(c: Cand): boolean {
+    if (c.cost === 0) return false;
+    if (this.crowds(c.box)) return true;
+    const from = c.leader && past(...c.leader);
+    const nears = (p: Box) => {
+      const q = grow(p, MASK);
+      return !!from && clipLength(from, c.leader![1], q.x0, q.y0, q.x1, q.y1) > 0;
+    };
+    if (this.placed.some(nears)) return true;
+    return (
+      !!c.r.mask && this.onInk(c.box) > 0 && this.hardUnder([0, 0], 0, grow(c.box, MASK)).length > 0
+    );
+  }
+
+  /** Whether a box is within the clear space round another label, or out of the drawing. */
+  private crowds(box: Box): boolean {
+    return this.outside(box) > 0 || this.placed.some((p) => overlap(grow(box, GAP, GAP_X), p) > 0);
   }
 
   /** What a leader from a to b would cross: lines, obstacles and labels, past its first few
    *  pixels. */
   leaderCost(a: Vec2, b: Vec2): number {
+    const from = past(a, b);
+    if (!from) return 0;
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    if (len <= LEADER_FREE) return 0;
-    const from: Vec2 = [
-      a[0] + ((b[0] - a[0]) * LEADER_FREE) / len,
-      a[1] + ((b[1] - a[1]) * LEADER_FREE) / len,
-    ];
     const box = {
       x0: Math.min(from[0], b[0]),
       y0: Math.min(from[1], b[1]),
@@ -374,6 +454,7 @@ export class LabelPlacer {
     let cost = 0;
     // Lines it crosses: the part of the leader within each line's band.
     for (const s of this.near(grow(box, 4))) {
+      if (segSegDist(from, b, s.a, s.b) > s.pad) continue;
       const n = Math.max(1, Math.ceil(len / 2));
       for (let i = 0; i <= n; i++) {
         const p: Vec2 = [
@@ -386,7 +467,9 @@ export class LabelPlacer {
     }
     for (const o of this.obstacles)
       cost += clipLength(from, b, o.x0, o.y0, o.x1, o.y1) * 2 * (o.w ?? 1);
-    for (const p of this.placed) cost += clipLength(from, b, p.x0, p.y0, p.x1, p.y1) * 8;
+    // Labels, with a mask's width round them: a leader that grazes one reads as part of it.
+    for (const p of this.placed)
+      cost += clipLength(from, b, p.x0 - MASK, p.y0 - MASK, p.x1 + MASK, p.y1 + MASK) * 8;
     return cost;
   }
 
@@ -405,14 +488,29 @@ export class LabelPlacer {
     return this.commit(dl, this.pick(reqs));
   }
 
-  /** Like placeAny(), over groups of requests in order of preference: the first group with a clear
-   *  place has it; failing all, the cheapest place of any (the earlier group on a tie). */
+  /** Like placeAny(), for a label that may be left out: only at a fit place (see unfit()), else
+   *  nowhere (null). */
+  placeFit(dl: DrawList, reqs: LabelReq[]): Placed | null {
+    const c = this.pick(reqs);
+    return c.bad ? null : this.commit(dl, c);
+  }
+
+  /** What placeAny() would pay for a label at its best fit place (see unfit()): Infinity where it
+   *  has none. */
+  price(reqs: LabelReq[]): number {
+    const c = this.pick(reqs);
+    return c.bad ? Infinity : c.cost;
+  }
+
+  /** Like placeAny(), over groups of requests in order of preference: the first group with a fit
+   *  place has its best one (over a mask or on a leader if need be; see unfit()); failing all, the
+   *  cheapest place of any (the earlier group on a tie). */
   placeFirst(dl: DrawList, groups: LabelReq[][]): Placed {
     let best: Cand | null = null;
     for (const g of groups) {
       const c = this.pick(g);
-      if (!best || c.cost < best.cost - 1e-6) best = c;
-      if (c.cost === 0) break;
+      if (better(c, best)) best = c;
+      if (!c.bad) break;
     }
     return this.commit(dl, best!);
   }
@@ -420,8 +518,11 @@ export class LabelPlacer {
   private pick(reqs: LabelReq[]): Cand {
     let best: Cand | null = null;
     const take = (c: Cand) => {
-      if (!best || c.cost < best.cost - 1e-6) best = c;
-      return best.cost === 0;
+      // No dearer place can beat a fit one, whatever it is.
+      if (best && !best.bad && c.cost >= best.cost - 1e-6) return false;
+      c.bad = this.unfit(c);
+      if (better(c, best)) best = c;
+      return best!.cost === 0;
     };
     search: {
       for (const r of reqs)
@@ -449,11 +550,19 @@ export class LabelPlacer {
   private commit(dl: DrawList, c: Cand): Placed {
     const size = c.r.size ?? 'm';
     const ref = c.r.ref ?? '';
-    if (c.cost > 0 && c.r.mask && this.onInk(c.box) > 0) this.mask(dl, corners(c.box), MASK);
+    if (c.cost > 0 && c.r.mask && this.onInk(c.box) > 0) {
+      // Parentheses reach a sixth of the capitals further down than the box, and a closing degree
+      // sign a ninth further on: the paper reaches as far past them, clear of a wide line.
+      const m = grow(c.box, MASK);
+      if (/[()]/.test(c.r.text)) m.y1 += CAP[size] / 6;
+      if (c.r.text.endsWith('°')) m.x1 += CAP[size] / 9;
+      this.mask(dl, m);
+    }
     this.placed.push(c.box);
     if (c.leader) {
       dl.line(c.leader[0], c.leader[1], 'dim', ref);
-      this.line(c.leader, 1);
+      // Other labels may come close to a leader, but not within a stroke's reach (°) of it.
+      this.line(c.leader, 1.5);
     }
     letter(dl, c.r.text, c.box.x0, (c.box.y0 + c.box.y1) / 2, { size, valign: 'middle', ref });
     return { ...c.box, cost: c.cost };
@@ -466,27 +575,39 @@ export class LabelPlacer {
   /**
    * Where a dimension value along the line q1 → q2 would go, lettered as dimText() letters it (over
    * the line, readable from the bottom or the right): the first of the fractions `at` along the line
-   * where it is clear, else the cheapest. Values in parentheses stand a little higher, clear of their
-   * own line.
+   * where it is clear, else the cheapest (one on another label or out of the drawing, or whose mask
+   * would hide a mark, only as a last resort). Values in parentheses stand a little higher, clear of
+   * their own line.
    */
   along(
     q1: Vec2,
     q2: Vec2,
     text: string,
     o: AlongOpts = {},
-  ): { mid: Vec2; t: number; cost: number; ink: number } {
+  ): { mid: Vec2; t: number; cost: number; ink: number; bad: boolean } {
     const size = o.size ?? 'm';
     const dir: Vec2 = [q2[0] - q1[0], q2[1] - q1[1]];
     const { ang, up, lift } = dimTurn(dir, size);
     const raise = text.startsWith('(') ? 1.5 : 0;
     const w = measure(text) * CAP[size];
-    let best: { mid: Vec2; t: number; cost: number; ink: number } | null = null;
+    let best: { mid: Vec2; t: number; cost: number; ink: number; bad: boolean } | null = null;
     for (const t of o.at ?? ALONG) {
       const mid: Vec2 = [q1[0] + dir[0] * t + up[0] * raise, q1[1] + dir[1] * t + up[1] * raise];
       const c: Vec2 = [mid[0] + up[0] * lift, mid[1] + up[1] * lift];
       const cost = this.costTurned(c[0], c[1], ang, w, CAP[size]);
-      if (!best || cost < best.cost - 1e-6)
-        best = { mid, t, cost, ink: this.onInkTurned(c[0], c[1], ang, w, CAP[size]) };
+      if (best && !best.bad && cost >= best.cost - 1e-6) continue;
+      const ink = cost > 0 ? this.onInkTurned(c[0], c[1], ang, w, CAP[size]) : 0;
+      // Between the value and its own line no mask reaches: another line there, or along its own,
+      // would graze it.
+      const strip = { x0: -w / 2, y0: CAP[size] / 2, x1: w / 2, y1: lift + raise + 1 };
+      const bad =
+        cost > 0 &&
+        (this.crowds(turnedBox(c[0], c[1], ang, w, CAP[size], 0)) ||
+          this.crosses(c, ang, strip) ||
+          (ink > 0 &&
+            o.mask !== false &&
+            this.hardUnder(c, ang, valueMask(text, size, lift + raise)).length > 0));
+      if (better({ cost, bad }, best)) best = { mid, t, cost, ink, bad };
       if (cost === 0) break;
     }
     return best!;
@@ -508,38 +629,19 @@ export class LabelPlacer {
     const quad = dimText(dl, mid, dir, text, o.ref ?? '', size);
     if (ink > 0 && o.mask !== false) {
       const { ang, up, lift } = dimTurn(dir, size);
-      const a: Vec2 = [Math.cos(ang), Math.sin(ang)];
       const c: Vec2 = [mid[0] + up[0] * lift, mid[1] + up[1] * lift];
-      // Down to 1.5 px under the baseline only: the value's own line, 3 px under it, stays whole.
-      const hw = (measure(text) * CAP[size]) / 2 + MASK,
-        top = CAP[size] / 2 + MASK,
-        bottom = -(CAP[size] / 2 + 1.5);
-      const at = (u: number, v: number): Vec2 => [
-        c[0] + a[0] * u + up[0] * v,
-        c[1] + a[1] * u + up[1] * v,
-      ];
-      this.mask(dl, [at(-hw, bottom), at(hw, bottom), at(hw, top), at(-hw, top)], 0);
+      const raise = text.startsWith('(') ? 1.5 : 0;
+      this.maskIn(dl, c, ang, valueMask(text, size, lift + raise));
     }
     const box = bbox(quad, 1);
     this.placed.push(box);
     return { ...box, cost, t, quad };
   }
 
-  /** Interrupt the lines under a label: a paper-coloured patch over the quadrilateral `quad` (a box's
-   *  corners, in order), `grow` px larger all round. */
-  mask(dl: DrawList, quad: Vec2[], grow = 1) {
-    dl.fill(
-      quad.map((p, i) => {
-        // Out along both edges that meet at this corner.
-        const prev = quad[(i + quad.length - 1) % quad.length]!,
-          next = quad[(i + 1) % quad.length]!;
-        const u = unitOf([p[0] - next[0], p[1] - next[1]]),
-          v = unitOf([p[0] - prev[0], p[1] - prev[1]]);
-        return [p[0] + (u[0] + v[0]) * grow, p[1] + (u[1] + v[1]) * grow] as Vec2;
-      }),
-      '',
-      'mask',
-    );
+  /** Interrupt the lines under a label: a paper-coloured patch over the box `b`, cut round any mark
+   *  or outline there. */
+  mask(dl: DrawList, b: Box) {
+    this.maskIn(dl, [0, 0], 0, b);
   }
 }
 
@@ -554,10 +656,26 @@ function turnedBox(cx: number, cy: number, ang: number, w: number, h: number, ma
   return { x0: cx - bw, y0: cy - bh, x1: cx + bw, y1: cy + bh };
 }
 
-const unitOf = (v: Vec2): Vec2 => {
-  const l = Math.hypot(v[0], v[1]);
-  return l > 1e-9 ? [v[0] / l, v[1] / l] : [0, 0];
-};
+/** The paper under a value lettered along a line, in its own frame (about the middle of its
+ *  capitals, y down): round its box, but only down to a pixel short of its own line, `drop` px under
+ *  the middle, which stays whole. */
+function valueMask(text: string, size: TextSize, drop: number): Box {
+  const { w, h } = textBox(text, size);
+  return { x0: -w / 2 - MASK, y0: -h / 2 - MASK, x1: w / 2 + MASK, y1: drop - 1 };
+}
+
+/** A label's frame, centred at c and turned by `ang` (y down): a page point in it, and back. */
+function frame(c: Vec2, ang: number) {
+  const cs = Math.cos(ang),
+    sn = Math.sin(ang);
+  return {
+    local: ([x, y]: Vec2): Vec2 => [
+      (x - c[0]) * cs + (y - c[1]) * sn,
+      -(x - c[0]) * sn + (y - c[1]) * cs,
+    ],
+    page: ([u, v]: Vec2): Vec2 => [c[0] + cs * u - sn * v, c[1] + sn * u + cs * v],
+  };
+}
 
 const corners = (b: Box): Vec2[] => [
   [b.x0, b.y0],
@@ -565,6 +683,14 @@ const corners = (b: Box): Vec2[] => [
   [b.x1, b.y1],
   [b.x0, b.y1],
 ];
+
+/** Where a leader from a to b starts to count: past its first few pixels, which may touch what it
+ *  points at (null for a leader no longer than that). */
+function past(a: Vec2, b: Vec2): Vec2 | null {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (len <= LEADER_FREE) return null;
+  return [a[0] + ((b[0] - a[0]) * LEADER_FREE) / len, a[1] + ((b[1] - a[1]) * LEADER_FREE) / len];
+}
 
 /** A leader from an anchor to a label's box, stopping just short of the box. */
 function leaderTo(a: Vec2, box: Box): [Vec2, Vec2] {
