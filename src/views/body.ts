@@ -138,18 +138,38 @@ export class BodyView extends View {
   inset: Box | null = null;
   /** Where the view was before the obliquity turned it into the orbit plane, to turn back to. */
   private beforeObliquity: Orientation | null = null;
-  /** The reader turned the view while the obliquity was in focus: leave it where they put it. */
+  /** The reader turned the view while the obliquity was in focus: keep their turn afterwards. */
   private keepTurn = false;
 
   constructor(svg: SVGSVGElement, m: BodyModel) {
     super(svg, BODY_HOME, { turntable: true });
     this.m = m;
-    this.onDrag = () => {
+    this.onTurn = () => {
       if (this.focus !== 'obliquity') return;
       this.beforeObliquity = null;
       this.keepTurn = true;
     };
     this.measure();
+  }
+
+  /**
+   * What View A shows, from where the camera is or is turning to: 'tilt' in the orbit plane with the
+   * axis plane square on (the obliquity at true size), 'edge' in the orbit plane turned from there,
+   * 'above' the orbit plane.
+   */
+  get aspect(): 'tilt' | 'edge' | 'above' {
+    const { yaw, pitch } = this.camera.target;
+    if (Math.abs(pitch) > 1e-3) return 'above';
+    return Math.abs(Math.sin(yaw)) < 1e-3 ? 'tilt' : 'edge';
+  }
+
+  /** With the obliquity in focus, a reset goes back to the view that shows it at true size. */
+  override resetView() {
+    if (this.focus !== 'obliquity') return super.resetView();
+    this.beforeObliquity = null;
+    this.keepTurn = false;
+    this.turn(TRUE_OBLIQUITY, { ms: 700 });
+    this.onTurned?.();
   }
 
   protected override animated() {
@@ -177,12 +197,17 @@ export class BodyView extends View {
     const was = this.focus;
     this.focus = key;
     this.scene.setHot(key);
-    // The obliquity is true size only in the orbit plane: go there while it is in focus.
+    // The obliquity is true size only in the orbit plane: go there while it is in focus. Afterwards
+    // go back; or, when the reader turned the view meanwhile, keep their turn and only rise back
+    // above the orbit plane.
     if (key === 'obliquity' && was !== key) {
-      this.beforeObliquity = { yaw: this.camera.yaw, pitch: this.camera.pitch };
+      this.beforeObliquity = this.camera.target;
       this.turn(TRUE_OBLIQUITY, { ms: 700, instant });
     } else if (was === 'obliquity' && key !== was) {
-      if (!this.keepTurn) this.turn(this.beforeObliquity ?? BODY_HOME, { ms: 700, instant });
+      const back = this.keepTurn
+        ? { yaw: this.camera.target.yaw, pitch: BODY_HOME.pitch }
+        : (this.beforeObliquity ?? BODY_HOME);
+      this.turn(back, { ms: 700, instant });
       this.beforeObliquity = null;
       this.keepTurn = false;
     }

@@ -60,11 +60,13 @@ export function num(v: Val | undefined, what: string): number {
 
 /**
  * NASA's ratio-to-Earth value for a main-table row. The ratio table repeats the moon count and the
- * yes/no rows as they are; those are not ratios, so they are not returned.
+ * yes/no rows as they are, and prints "Unknown" where the main table does (the giants' surface
+ * pressure); those are not ratios, so they are not returned.
  */
 export function ratioVal(id: BodyId, key: string): Val | undefined {
   if (key === 'moons' || key === 'ringSystem' || key === 'magneticField') return undefined;
-  return FACTS.ratio.rows.find((r) => r.key === key)?.values[id];
+  const v = FACTS.ratio.rows.find((r) => r.key === key)?.values[id];
+  return v?.value === null ? undefined : v;
 }
 
 /** The text of a value with its footnote marker, as printed. */

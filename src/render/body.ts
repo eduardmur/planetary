@@ -29,6 +29,7 @@ import {
   isoDate,
   label,
   named,
+  titleLine,
   val,
   type PageCtx,
   type Rendered,
@@ -67,9 +68,12 @@ function tabs(id: BodyId, ctx: PageCtx): string {
   // Sized exactly as src/main.ts letters it, so nothing moves when the lettering arrives.
   const w = measure('PLANETARY') * CAP.l + 4;
   const h = Math.ceil(CAP.l * 1.5);
+  // ‹ › show where the strip hides tabs, and scroll it for a mouse (src/ui/sheet.ts).
+  const more = (dir: number, glyph: string) =>
+    `<span class="more" data-dir="${dir}" aria-hidden="true">${glyph}</span>`;
   return `<header class="tabs">
       <a class="home" href="${ctx.base}"><svg class="title-lettering" data-text="PLANETARY" data-size="l" width="${w}" height="${h}" aria-hidden="true"></svg><span class="sun" aria-hidden="true">☉</span><span class="visually-hidden">Planetary</span></a>
-      <nav aria-label="Bodies"><ol class="strip">${links}</ol></nav>
+      <nav aria-label="Bodies">${more(-1, '‹')}<ol class="strip">${links}</ol>${more(1, '›')}</nav>
       ${infoButton('Notes and sources')}
     </header>`;
 }
@@ -191,9 +195,17 @@ function alsoDrawn(id: BodyId, key: string): string {
 const conflict = (d: Discrepancy) =>
   `<p class="conflict">NASA’s pages disagree: ${esc(d.what)}: ${esc(d.a)} (${esc(d.aSrc)}) vs ${esc(d.b)} (${esc(d.bSrc)}).${d.note ? ` ${esc(d.note)}` : ''}</p>`;
 
+/** What a drawn row lights up, where its value sizes nothing. */
+const SHOWN: Partial<Record<string, string>> = {
+  orbitalVelocity:
+    'Drawn: today’s position and the direction of motion. The arrow is a symbol; its length is not the speed.',
+};
+
 /**
  * A row's popover: the label and NASA's value, its ratio to Earth, NASA's definition verbatim, what
  * else the drawing takes from the body's page, where NASA's pages disagree, and the notes link.
+ * "auto" without the script: one open at a time, closed by Esc or a click elsewhere. The script
+ * makes them "manual" and keeps the one selection itself.
  */
 function popover(id: BodyId, key: string, isDrawn: boolean): string {
   const r = mainRow(key);
@@ -201,14 +213,19 @@ function popover(id: BodyId, key: string, isDrawn: boolean): string {
   const ratio = id === 'earth' ? undefined : ratioVal(id, key);
   // NASA's starred ratio sentence, unless the definition above already says it.
   const ratioNote = ratio?.note === '*' ? starNote(FACTS.definitions.ratio?.[key]?.text) : '';
-  return `<div popover="manual" id="def-${key}" class="def" role="group" aria-labelledby="t-${key}">${[
+  const shown = SHOWN[key];
+  return `<div popover="auto" id="def-${key}" class="def" role="group" aria-labelledby="t-${key}">${[
     `<header><h2 id="t-${key}">${label(r.label)}</h2><button type="button" class="close" popovertarget="def-${key}" popovertargetaction="hide" aria-label="Close">×</button></header>`,
     `<p class="value"><b>${val(mainVal(id, key))}</b>${ratio?.text ? ` <span class="ratio">× Earth ${val(ratio)}</span>` : ''}</p>`,
     def ? `<p class="text">${esc(def.text)}</p>` : '',
     ratioNote && !def?.text.includes(ratioNote)
       ? `<p class="ratio-note">× Earth*: ${esc(ratioNote)}</p>`
       : '',
-    isDrawn ? '' : '<p class="not-drawn">Not drawn.</p>',
+    isDrawn
+      ? shown
+        ? `<p class="n">${esc(shown)}</p>`
+        : ''
+      : '<p class="not-drawn">Not drawn.</p>',
     alsoDrawn(id, key),
     ...DISCREPANCIES.filter((d) => d.body === id && d.key === key).map(conflict),
     `<p class="src"><a href="${NOTES_MAIN}#${r.anchor}">NASA notes ↗</a></p>`,
@@ -238,7 +255,7 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
       ? 'ORBIT ORIENTATION AND POSITIONS FROM NASA’S J2000 MEAN ELEMENTS (TWO-BODY): WITHIN 0.5° OF JPL HORIZONS 1990–2060, 0.3° FOR ALL BUT MERCURY.'
       : 'ORBIT ABOUT THE EARTH FROM NASA’S MAIN-TABLE PERIGEE AND APOGEE. NASA GIVES NO NODE OR PERIGEE LONGITUDE FOR THE MOON: ORIENTATION ARBITRARY, NO POSITION SHOWN.',
     plan.j2000
-      ? 'KEY PLAN: SUN AND BODY ARE SYMBOLS, NOT TO SCALE.'
+      ? 'KEY PLAN: SUN, BODY AND MOTION ARROW ARE SYMBOLS, NOT TO SCALE.'
       : 'KEY PLAN: THE EARTH IS A SYMBOL, NOT TO SCALE.',
     'NASA: “THE VALUES LISTED ON THE FACTSHEETS ARE NOT ‘OFFICIAL’ VALUES … CARE SHOULD BE EXERCISED WHEN USING THESE VALUES.”',
   ];
@@ -261,15 +278,28 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
   ];
   const conflicts = DISCREPANCIES.filter((d) => d.body === id).length;
   const positions = plan.j2000
-    ? `POSITIONS <time id="epoch" class="nowrap" datetime="${ctx.issued}">${ctx.issued}</time>`
+    ? `POSITIONS <time id="epoch" datetime="${ctx.issued}">${ctx.issued}</time>`
     : 'POSITION NOT GIVEN';
+  const title = titleLine([
+    sheet.dwg,
+    `SHEET ${sheet.number} / ${SHEET_COUNT}`,
+    esc(sheet.docType),
+    `ISSUED ${ctx.issued}`,
+    positions,
+    'SPIN 1 s = 1 h',
+  ]);
   const li = (s: string) => `<li>${s}</li>`;
-  return `<p>NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>
+  // .pointer and .touch follow the input (body.css); what needs the script is .js-only.
+  const act = '<span class="pointer">Click</span><span class="touch">Tap</span>';
+  return `<p><a href="${ctx.base}">☉ Planetary</a>: the solar system, moving. NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>
       <h3>Reading this sheet</h3>
       <ul>
-        <li><span class="pointer">Click</span><span class="touch">Tap</span> a row, or a line in the drawing, for NASA’s definition; what it measures turns yellow.</li>
-        <li>Rows marked ⊢⊣ are drawn. Drag view A to turn it; double-click to reset. Spin: 1 s = 1 h.</li>
-        <li>Tabs and ← → switch bodies and keep the selected row.</li>
+        <li class="js-only">${act} a row, or a line in the drawing, for NASA’s definition; what it measures turns yellow.</li>
+        <li class="nojs-only">${act} a row’s name for NASA’s definition.</li>
+        <li class="js-only pointer">While a definition is open, ↑ ↓ or ‹ › above the table step through the rows.</li>
+        <li class="js-only">Rows marked ⊢⊣ are drawn. Drag view A to turn it; <span class="pointer">double-click</span><span class="touch">double-tap</span> to reset. Spin: 1 s = 1 h.</li>
+        <li class="js-only">Tabs<span class="pointer"> and ← →</span> switch bodies and keep the selected row.</li>
+        <li>PLANETARY at the top left (☉ on a narrow screen) returns to the solar system.</li>
       </ul>
       <h3>General notes</h3>
       <ol class="drafting">${notes.map((n) => li(esc(n))).join('')}</ol>
@@ -277,7 +307,7 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
       <ul class="sources">${sources.map(li).join('')}</ul>
       <h3>Data and code</h3>
       <p><a href="${ctx.base}data/factsheet.json">JSON</a> · <a href="${ctx.base}data/factsheet-main.csv">CSV</a> · ${out(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree (${conflicts} for ${esc(named(id))})`)} · ${out(ctx.repo, 'Source code')}</p>
-      <p class="title-line">${sheet.dwg} · SHEET ${sheet.number} / ${SHEET_COUNT} · ${esc(sheet.docType)} · ISSUED <span class="nowrap">${ctx.issued}</span> · ${positions} · SPIN <span class="nowrap">1 s = 1 h</span></p>
+      <p class="title-line">${title}</p>
       <p class="status">Planetary · Unofficial — not a NASA product · not affiliated with or endorsed by NASA</p>`;
 }
 
@@ -308,10 +338,10 @@ export function bodySheet(id: BodyId, sheet: Sheet, ctx: PageCtx): Rendered {
     ${tabs(id, ctx)}
     <h1 id="sheet-title" class="visually-hidden">${esc(name)}</h1>
     <section class="views" aria-label="Drawings">
-      <noscript><p class="noscript">The drawings need JavaScript. NASA’s values and definitions work without it.</p></noscript>
+      <p class="noscript">The drawings need JavaScript. NASA’s values and definitions work without it.</p>
       <figure class="view view-a">
         <svg class="drawing" id="view-a" tabindex="0" role="img" aria-label="View A: ${esc(named(id))}, axis tilted ${obliquity} degrees from the orbit normal, with a scale bar in km. Drag sideways or use the arrow keys to turn it."></svg>
-        <figcaption><span class="letter">A</span><span class="caption" data-plan="20° above the orbit plane" data-tilt="Orbit plane edge-on · tilt true size">20° above the orbit plane</span><span class="hint">· drag to turn · <span class="si">1 s = 1 h</span></span><button type="button" class="swap" data-show="plan">Key plan</button><button type="button" id="pause">Pause</button></figcaption>
+        <figcaption><span class="letter">A</span><span class="caption" data-plan="20° above the orbit plane" data-tilt="Orbit plane edge-on · tilt true size" data-edge-on="Orbit plane edge-on">20° above the orbit plane</span><span class="hint">· drag to turn · <span class="si">1 s = 1 h</span></span><button type="button" class="swap" data-show="plan">Key plan</button><button type="button" id="pause">Pause</button></figcaption>
       </figure>
       <figure class="view key-plan">
         <svg class="drawing clip" id="key-plan" role="img" aria-label="${esc(planLabel)}" data-label="${esc(planLabel)}" data-edge-label="${esc(edgeLabel)}"></svg>
@@ -326,6 +356,7 @@ export function bodySheet(id: BodyId, sheet: Sheet, ctx: PageCtx): Rendered {
           ${rows}
         </tbody>
       </table>
+      <div class="steps" role="group" aria-label="Rows"><button type="button" class="step" data-step="-1" aria-label="Previous row">‹</button><button type="button" class="step" data-step="1" aria-label="Next row">›</button></div>
       <p class="legend"><span class="mark" aria-hidden="true"></span> drawn · <span class="pointer">click</span><span class="touch">tap</span> a row for NASA’s definition</p>
     </section>
   </main>
