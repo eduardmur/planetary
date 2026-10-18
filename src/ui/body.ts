@@ -96,46 +96,47 @@ export function initBody(data: PageData) {
     if (capture) a.clock = captureClock;
     // The caption says where the reader has turned View A.
     a.onTurned = () => captions(current);
-    focusables.push(a, p, {
-      // Phones show one drawing at a time: the key plan while an orbit row is selected.
-      setFocus(key) {
-        if (!phone.matches || !views) return;
-        const shape = shapeOf(key);
-        if (shape.includes('P')) showPlan(true);
-        else if (shape.includes('A')) showPlan(false);
-      },
-    });
+    focusables.push(a, p, { setFocus: swap });
     spinners.push(a);
     exposeViews({ a, p });
   }
 
+  /** Phones show one drawing at a time: the key plan while an orbit row is selected, View A while
+   *  a row it draws is. */
+  function swap(key: string | null) {
+    if (!phone.matches || !views) return;
+    const shape = shapeOf(key);
+    if (shape.includes('P')) showPlan(true);
+    else if (shape.includes('A')) showPlan(false);
+  }
   function showPlan(on: boolean) {
     if (!views || views.classList.contains('show-plan') === on) return;
     views.classList.toggle('show-plan', on);
-    // Keep keyboard focus on the toggle that is now visible.
+    // Keep keyboard focus on the toggle that is now visible. It is in sight already, in the sticky
+    // drawing; Chromium would still scroll the table to it.
     const visible = document.querySelector<HTMLButtonElement>(
       `figcaption .swap[data-show="${on ? 'a' : 'plan'}"]`,
     );
-    if (document.activeElement?.classList.contains('swap')) visible?.focus();
+    if (document.activeElement?.classList.contains('swap')) visible?.focus({ preventScroll: true });
   }
   for (const b of document.querySelectorAll<HTMLButtonElement>('figcaption .swap'))
     b.addEventListener('click', () => showPlan(b.dataset.show === 'plan'));
 
-  /** Captions follow the views: View A's says where its camera is (or is turning to); the key plan's
-   *  turns edge-on with the inclination. */
-  const capA = document.querySelector<HTMLElement>('.view-a .caption');
+  /** Captions follow the views: View A's says where its camera is (or is turning to), in full and
+   *  in short; the key plan's turns edge-on with the inclination. */
+  const capsA = document.querySelectorAll<HTMLElement>('.view-a .caption > span');
   const capP = document.querySelector<HTMLElement>('.key-plan .caption');
-  const setText = (el: HTMLElement | null, text: string | undefined) => {
-    if (el && text !== undefined && el.textContent !== text) el.textContent = text;
-  };
   function captions(key: string | null) {
     const edge = key === 'orbitalInclination';
-    if (capA && viewA) {
+    if (viewA) {
       const at = viewA.aspect;
-      const d = capA.dataset;
-      setText(capA, at === 'tilt' ? d.tilt : at === 'edge' ? d.edgeOn : d.plan);
+      for (const c of capsA) {
+        const text =
+          at === 'tilt' ? c.dataset.tilt : at === 'edge' ? c.dataset.edgeOn : c.dataset.plan;
+        if (text !== undefined && c.textContent !== text) c.textContent = text;
+      }
     }
-    setText(capP, edge ? capP?.dataset.edge : capP?.dataset.plan);
+    capP?.toggleAttribute('data-edge', edge);
     for (const s of document.querySelectorAll<SVGSVGElement>('svg[data-edge-label]'))
       s.setAttribute('aria-label', (edge ? s.dataset.edgeLabel : s.dataset.label) ?? '');
   }
@@ -159,6 +160,9 @@ export function initBody(data: PageData) {
   };
 
   let current: string | null = null;
+  // A tablet turned (or a window narrowed) into the one-drawing layout shows the drawing the
+  // selected row needs.
+  phone.addEventListener('change', () => swap(current));
   /** Set by select() around the toggle it causes: the views turn at once (deep links). */
   let instant = false;
   /** The same, kept for the open popover's toggle event, which comes after select() returns. */
@@ -184,8 +188,8 @@ export function initBody(data: PageData) {
 
   /**
    * Keep the selected row in sight. Docked: between the sticky block and the sheet, once the sheet
-   * is open and has its height. Otherwise the nearest way; on short screens the row goes to the edge
-   * that leaves its popover the most room.
+   * is open and has its height. Otherwise the nearest way, and on the desktop layout clear of the row
+   * stepper; on short screens the row goes to the edge that leaves its popover the most room.
    */
   function reveal(key: string, now = false) {
     const { row, def } = parts.get(key)!;
@@ -210,6 +214,16 @@ export function initBody(data: PageData) {
       block = top <= root.scrollHeight - innerHeight ? 'start' : 'end';
       // The side it will have there, kept while the page scrolls there, so it does not flip midway.
       pinned = { key, side: block === 'start' ? 'below' : 'above', until: performance.now() + 800 };
+    } else if (shown(stepper)) {
+      // Below the stepper, which is 2 px under the header or where the reader's steps hold it. A row
+      // stepped to with it comes at once: a smooth scroll would leave the stepper over it for a few
+      // frames.
+      const r = row.getBoundingClientRect();
+      const top = Math.max(pad + 2, held?.top ?? 0) + stepper!.offsetHeight + 2;
+      const foot = innerHeight - (parseFloat(getComputedStyle(root).scrollPaddingBottom) || 0);
+      const dy = r.top < top ? r.top - top : Math.max(0, Math.min(r.bottom - foot, r.top - top));
+      if (Math.abs(dy) >= 1) scrollTo({ top: scrollY + dy, behavior: behavior(now || !!held) });
+      return;
     }
     row.scrollIntoView({ block, behavior: behavior(now) });
   }
@@ -229,22 +243,33 @@ export function initBody(data: PageData) {
   const stepper = document.querySelector<HTMLElement>('.steps');
   const table = document.querySelector<HTMLTableElement>('table.main');
   const PLACED = ['top', 'bottom', 'left', 'width', 'max-height', 'min-height', 'clip-path'];
-  /** The room a popover has: under the header (on the desktop layout, under the row stepper) and
-   *  above the foot of the frame, or of the screen (above the home indicator) where the frame runs
-   *  on below it. */
+  /** The room a popover has: under the header (on the desktop layout, from the first rule under the
+   *  row stepper) and above the foot of the frame, or of the screen (above the home indicator) where
+   *  the frame runs on below it. */
   function bounds() {
     const head = header?.getBoundingClientRect().bottom ?? 0;
-    const ceiling = shown(stepper) ? Math.max(head, stepper!.getBoundingClientRect().bottom) : head;
+    let ceiling = head;
+    if (shown(stepper)) {
+      // A row's rule, not the stepper's foot, which can lie across a row: the row the stepper stands
+      // on stays whole above a popover, but for its end under the stepper.
+      const under = Math.max(head, stepper!.getBoundingClientRect().bottom);
+      ceiling =
+        rowEls.map((r) => r.getBoundingClientRect().top).find((v) => v >= under - 0.5) ?? under;
+    }
     const frameFoot = frame?.getBoundingClientRect().bottom ?? Infinity;
     const safe = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
     const floor = frameFoot <= innerHeight - safe ? frameFoot - 4 : innerHeight - safe;
     return { head, ceiling, floor };
   }
-  /** The stepper rides on the caption line and stays under the header once the table has scrolled
-   *  up under it, so the rows can be stepped through without moving the pointer. */
   /** Laid out at all (the stepper is only on the desktop layout); a fixed element has no
    *  offsetParent, so that cannot tell. */
   const shown = (el: Element | null) => !!el && el.getClientRects().length > 0;
+  /** Where the stepper was when the reader stepped to this row with it (its top): it stays there
+   *  while they step on, though the page scrolls to the next row, so the pointer never has to
+   *  follow it. Any other selection lets it go. */
+  let held: { top: number; key: string } | null = null;
+  /** The stepper rides on the caption line and stays under the header once the table has scrolled
+   *  up under it, so the rows can be stepped through without moving the pointer. */
   function placeStepper(head: number) {
     if (!stepper || !schedule) return;
     if (!current || !shown(stepper)) {
@@ -252,10 +277,10 @@ export function initBody(data: PageData) {
       return;
     }
     // Where its CSS puts it on the caption line (4 px down, 8 px in from the column's right edge),
-    // but on the screen, and never under the header.
+    // but on the screen, never under the header, and not above where the reader's steps hold it.
     const sc = schedule.getBoundingClientRect();
     stepper.style.position = 'fixed';
-    stepper.style.top = `${Math.max(head + 2, sc.top + 4)}px`;
+    stepper.style.top = `${Math.max(head + 2, sc.top + 4, held?.top ?? -Infinity)}px`;
     stepper.style.right = `${root.clientWidth - sc.right + 8}px`;
   }
   function place() {
@@ -315,7 +340,11 @@ export function initBody(data: PageData) {
       const top = row.getBoundingClientRect().bottom + 4;
       const last = rowEls.at(-1)!.getBoundingClientRect().bottom;
       const stops = [...tops, last, ...(leg && leg.top > last ? [leg.bottom + 3] : [])];
-      const y = stops.find((v) => v >= d.bottom - 0.5 && v <= floor) ?? floor;
+      // A rule beyond the room runs it to the end of the room; past the last rule there is no text
+      // left to cut, and the popover keeps its own height.
+      const next = stops.find((v) => v >= d.bottom - 0.5);
+      const y =
+        next === undefined ? (floor - d.bottom < LINE ? floor : d.bottom) : Math.min(next, floor);
       def.style.minHeight = `${y - top}px`;
     }
   }
@@ -370,6 +399,7 @@ export function initBody(data: PageData) {
   function sync(key: string | null) {
     const was = current;
     current = key;
+    if (held?.key !== key) held = null;
     if (was && was !== key) for (const k of PLACED) parts.get(was)!.def.style.removeProperty(k);
     for (const [k, p] of parts) {
       p.button.setAttribute('aria-expanded', String(k === key));
@@ -435,13 +465,31 @@ export function initBody(data: PageData) {
   }
   rove(buttons[0]!);
 
-  // The row stepper on the caption line: the previous or next row, without moving the pointer off it.
-  for (const b of steps)
-    b.addEventListener('click', () => {
-      if (!current) return;
-      const i = order.indexOf(current) + Number(b.dataset.step);
-      select(order[Math.max(0, Math.min(order.length - 1, i))]!);
+  // ‹ › step to the previous or next row: on the caption line (the desktop layout), which stays put
+  // meanwhile, or in the popover's header (elsewhere), where focus on one goes on to the same button
+  // in the next popover. ↑ ↓ step from either too.
+  function stepFrom(b: HTMLButtonElement, by: number) {
+    if (!current) return;
+    const key = order[Math.max(0, Math.min(order.length - 1, order.indexOf(current) + by))]!;
+    const inStepper = !!stepper?.contains(b);
+    const focused = document.activeElement === b;
+    if (inStepper) held = { top: stepper!.getBoundingClientRect().top, key };
+    select(key);
+    if (!inStepper && focused)
+      parts
+        .get(key)!
+        .def.querySelector<HTMLButtonElement>(`.step[data-step="${b.dataset.step}"]`)
+        ?.focus({ preventScroll: true });
+  }
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.step')) {
+    b.addEventListener('click', () => stepFrom(b, Number(b.dataset.step)));
+    b.addEventListener('keydown', (e) => {
+      const by = { ArrowUp: -1, ArrowDown: 1 }[e.key];
+      if (by === undefined || e.altKey || e.ctrlKey || e.metaKey) return;
+      e.preventDefault();
+      stepFrom(b, by);
     });
+  }
 
   // ---- Pointer --------------------------------------------------------------------------------
 
@@ -460,13 +508,20 @@ export function initBody(data: PageData) {
   }
 
   const viewAEl = svg('view-a');
-  /** The selection before the last click on a drawing. */
+  /** The selection before the last click on a drawing, and where the page was scrolled then. */
   let beforeClick: string | null = null;
+  let beforeY = 0;
   /** A double-click or a double tap on View A resets the view and leaves the selection as it was
-   *  before its first click. */
+   *  before its first click, and the table where it was (on a phone that click's row has scrolled
+   *  it). */
   const keepSelection = () => {
     clearTimeout(closing);
-    if (current !== beforeClick) select(beforeClick);
+    if (current === beforeClick) return;
+    select(beforeClick);
+    // Again a frame later: Chromium adds the next step of a smooth scroll in flight to the first.
+    const back = () => scrollTo({ top: beforeY, behavior: 'instant' });
+    back();
+    requestAnimationFrame(back);
   };
   frame?.addEventListener(
     'dblclick',
@@ -488,7 +543,10 @@ export function initBody(data: PageData) {
         keepSelection();
         return;
       }
-      if (e.detail <= 1) beforeClick = current;
+      if (e.detail <= 1) {
+        beforeClick = current;
+        beforeY = scrollY;
+      }
       // Not after a drag, and not the second click of a double-click (which resets View A).
       if (drawing.dataset.dragged === '1' || e.detail > 1) return;
       // A line selects its row, or lets go of it when it is the selected one; blank paper deselects.
@@ -527,7 +585,7 @@ export function initBody(data: PageData) {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     if (e.key === 'Escape') {
       // The dialog closes itself; otherwise Esc lets go of the selection, and focus that was in
-      // the popover (or nowhere) goes back to its row.
+      // the popover or on the stepper (or nowhere) goes back to its row.
       if (document.querySelector('dialog[open]') || !current) return;
       const p = parts.get(current)!;
       const at = document.activeElement;
@@ -537,8 +595,8 @@ export function initBody(data: PageData) {
       return;
     }
     // ← → open the previous or next body, on the same row; in the table ↑ ↓ walk the rows and ← →
-    // the bodies. Arrows keep their own meaning in the drawings (turn), a popover, a dialog and form
-    // fields.
+    // the bodies. Arrows keep their own meaning in the drawings (turn), on the stepper (rows), in a
+    // popover, a dialog and form fields.
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     const n = tabs.length;
     const step = e.key === 'ArrowRight' ? 1 : n - 1;
@@ -549,7 +607,8 @@ export function initBody(data: PageData) {
       tabs[(j + step) % n]!.focus();
       return;
     }
-    if ((e.target as Element).closest('svg.drawing, .def, dialog, input, textarea, select')) return;
+    if ((e.target as Element).closest('svg.drawing, .steps, .def, dialog, input, textarea, select'))
+      return;
     const i = tabs.findIndex((t) => t.getAttribute('aria-current') === 'page');
     if (i < 0) return;
     flushHash();
@@ -586,11 +645,15 @@ export function initBody(data: PageData) {
   const strip = document.querySelector<HTMLElement>('.tabs .strip');
   const nav = strip?.parentElement;
   const here = strip?.querySelector<HTMLElement>('[aria-current="page"]');
+  const range = document.createRange();
   const edges = () => {
     if (!strip || !nav) return;
-    const max = strip.scrollWidth - strip.clientWidth;
-    const left = strip.scrollLeft > 1,
-      right = strip.scrollLeft < max - 1;
+    // A side hides tabs where the name of the end tab runs past it, not where only padding does.
+    const s = strip.getBoundingClientRect();
+    range.selectNodeContents(tabs[0]!);
+    const left = range.getBoundingClientRect().left < s.left - 0.5;
+    range.selectNodeContents(tabs.at(-1)!);
+    const right = range.getBoundingClientRect().right > s.right + 0.5;
     const more = left && right ? 'both' : left ? 'left' : right ? 'right' : '';
     if (nav.dataset.more !== more) nav.dataset.more = more;
   };
@@ -629,18 +692,20 @@ export function initBody(data: PageData) {
       },
       { passive: false },
     );
-    // A tab that takes keyboard focus comes out from under the faded edges.
+    // A tab that takes keyboard focus under a faded edge (or under ‹ › where they show) goes to the
+    // middle of the strip. The strip snaps to tabs in its middle: a scroll just far enough to clear
+    // the edge would snap back short of it. Only keyboard focus: a tab that a press focuses must
+    // stay under the finger or the mouse, or the click is lost.
     strip.addEventListener('focusin', (e) => {
+      if (!(e.target as Element).matches(':focus-visible')) return;
       const st = strip.getBoundingClientRect(),
         r = (e.target as Element).getBoundingClientRect(),
-        pad = 32;
-      const d =
-        r.left < st.left + pad
-          ? r.left - st.left - pad
-          : r.right > st.right - pad
-            ? r.right - st.right + pad
-            : 0;
-      if (d) strip.scrollBy({ left: d, behavior: 'instant' });
+        pad = 32 + (parseFloat(getComputedStyle(strip).getPropertyValue('--more-w')) || 0);
+      if (r.left < st.left + pad || r.right > st.right - pad)
+        strip.scrollBy({
+          left: r.left + r.width / 2 - (st.left + st.width / 2),
+          behavior: 'instant',
+        });
     });
     // A click on a tab right after a selection takes the selected row along in the address too.
     for (const t of tabs) t.addEventListener('click', flushHash, true);
@@ -654,18 +719,29 @@ export function initBody(data: PageData) {
   }
 
   // Turning the phone: the current tab and the selected row come back into sight, and the popover
-  // takes its new place. Not on every resize: phones resize as their toolbars slide away while the
-  // page scrolls, and that must not pull the page back to the row.
-  matchMedia('(orientation: portrait)').addEventListener('change', () =>
+  // takes its new place; once more after the resize that follows (or 200 ms on), during which WebKit
+  // may scroll the page by itself. Not on every resize: phones resize as their toolbars slide away
+  // while the page scrolls, and that must not pull the page back to the row.
+  const inSight = () => {
+    if (!current) return;
+    place();
+    reveal(current, true);
+    place();
+  };
+  matchMedia('(orientation: portrait)').addEventListener('change', () => {
     requestAnimationFrame(() => {
       centre();
       if (!docked()) setTail(0);
-      if (!current) return;
-      place();
-      reveal(current, true);
-      place();
-    }),
-  );
+      inSight();
+    });
+    const again = () => {
+      clearTimeout(late);
+      removeEventListener('resize', again);
+      requestAnimationFrame(inSight);
+    };
+    const late = setTimeout(again, 200);
+    addEventListener('resize', again);
+  });
 
   expose({ show: (key: string | null) => select(key) });
 }

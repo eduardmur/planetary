@@ -220,6 +220,13 @@ const conflict = (d: Discrepancy, i: number, list: Discrepancy[]): string => {
   return `<p class="conflict">${lead} on ${esc(d.what)}: ${pairs.join('; ')}.${d.note ? ` ${esc(d.note)}` : ''}</p>`;
 };
 
+const stepButton = (by: number, glyph: string, name: string, end: boolean) =>
+  `<button type="button" class="step" data-step="${by}" aria-label="${name}"${end ? ' aria-disabled="true"' : ''}>${glyph}</button>`;
+/** ‹ › for the previous and the next row (src/ui/body.ts steps with them); none before the first
+ *  row or after the last. */
+const stepButtons = (first = false, last = false) =>
+  stepButton(-1, '‹', 'Previous row', first) + stepButton(1, '›', 'Next row', last);
+
 /** What a drawn row lights up, where its value sizes nothing. */
 const SHOWN: Partial<Record<string, string>> = {
   orbitalVelocity:
@@ -230,7 +237,8 @@ const SHOWN: Partial<Record<string, string>> = {
  * A row's popover: the label and NASA's value, its ratio to Earth, NASA's definition verbatim, what
  * else the drawing takes from the body's page, where NASA's pages disagree, and the notes link.
  * "auto" without the script: one open at a time, closed by Esc or a click elsewhere. The script
- * makes them "manual" and keeps the one selection itself.
+ * makes them "manual" and keeps the one selection itself. ‹ › in the header step to the next row
+ * where there is no stepper above the table (body.css).
  */
 function popover(id: BodyId, key: string, isDrawn: boolean): string {
   const r = mainRow(key);
@@ -239,8 +247,9 @@ function popover(id: BodyId, key: string, isDrawn: boolean): string {
   // NASA's starred ratio sentence, unless the definition above already says it.
   const ratioNote = ratio?.note === '*' ? starNote(FACTS.definitions.ratio?.[key]?.text) : '';
   const shown = SHOWN[key];
+  const at = PARAMS.findIndex((p) => p.key === key);
   return `<div popover="auto" id="def-${key}" class="def" role="group" aria-labelledby="t-${key}">${[
-    `<header><h2 id="t-${key}">${label(r.label)}</h2><button type="button" class="close" popovertarget="def-${key}" popovertargetaction="hide" aria-label="Close">×</button></header>`,
+    `<header><h2 id="t-${key}">${label(r.label)}</h2>${stepButtons(at === 0, at === PARAMS.length - 1)}<button type="button" class="close" popovertarget="def-${key}" popovertargetaction="hide" aria-label="Close">×</button></header>`,
     `<p class="value"><b>${val(mainVal(id, key))}</b>${ratio?.text ? ` <span class="ratio">× Earth ${val(ratio)}</span>` : ''}</p>`,
     def ? `<p class="text">${esc(def.text)}</p>` : '',
     ratioNote && !def?.text.includes(ratioNote)
@@ -321,7 +330,7 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
       <ul>
         <li class="js-only">${act} a row, or a line in the drawing, for NASA’s definition; what it measures turns yellow.</li>
         <li class="nojs-only">${act} a row’s name for NASA’s definition.</li>
-        <li class="js-only pointer">While a definition is open, ↑ ↓<span class="steps-note"> or ‹ › above the table</span> step through the rows.</li>
+        <li class="js-only">While a definition is open, <span class="pointer">↑ ↓ or </span>‹ › <span class="steps-above">above the table</span><span class="steps-in">in the definition</span> step through the rows.</li>
         <li class="js-only">Rows marked ⊢⊣ are drawn. Drag view A to turn it; <span class="pointer">double-click</span><span class="touch">double-tap</span> to reset. Spin: 1 s = 1 h.</li>
         <li class="js-only">Tabs<span class="pointer"> and ← →</span> switch bodies and keep the selected row.</li>
         <li>PLANETARY at the top left (☉ on a phone or a small window) returns to the solar system.</li>
@@ -357,6 +366,9 @@ export function bodySheet(id: BodyId, sheet: Sheet, ctx: PageCtx): Rendered {
   const edgeCaption = moon
     ? 'Key plan · edge-on to the ecliptic'
     : 'Key plan · edge-on, along the line of nodes';
+  // Where View A's camera is, in full and in short for phones (body.css shows one of them).
+  const viewCaption = (cls: string, plan: string, tilt: string, edgeOn: string) =>
+    `<span class="${cls}" data-plan="${plan}" data-tilt="${tilt}" data-edge-on="${edgeOn}">${plan}</span>`;
   const html = `<main class="sheet sheet-body" aria-labelledby="sheet-title">
     <span class="marks" aria-hidden="true"></span>
     <a class="skip" href="#schedule">Skip to table</a>
@@ -366,11 +378,11 @@ export function bodySheet(id: BodyId, sheet: Sheet, ctx: PageCtx): Rendered {
       <p class="noscript">The drawings need JavaScript, which is off or did not load. NASA’s values and definitions work without it.</p>
       <figure class="view view-a">
         <svg class="drawing" id="view-a" tabindex="0" role="img" aria-label="View A: ${esc(named(id))}, axis tilted ${obliquity} degrees from the orbit normal, with a scale bar in km. Drag sideways or use the arrow keys to turn it."></svg>
-        <figcaption><span class="letter">A</span><span class="caption" data-plan="20° above the orbit plane" data-tilt="Tilt true size · orbit plane edge-on" data-edge-on="Orbit plane edge-on">20° above the orbit plane</span><span class="hint">· drag to turn · <span class="si">1 s = 1 h</span></span><button type="button" class="swap" data-show="plan">Key plan</button><button type="button" id="pause">Pause</button></figcaption>
+        <figcaption><span class="letter">A</span><span class="caption">${viewCaption('long', '20° above the orbit plane', 'Tilt true size · orbit plane edge-on', 'Orbit plane edge-on')}${viewCaption('short', '20° above orbit', 'Tilt true size', 'Orbit edge-on')}</span><span class="hint">· drag to turn · <span class="si">1 s = 1 h</span></span><button type="button" class="swap" data-show="plan">Key plan</button><button type="button" id="pause">Pause</button></figcaption>
       </figure>
       <figure class="view key-plan">
         <svg class="drawing clip" id="key-plan" role="img" aria-label="${esc(planLabel)}" data-label="${esc(planLabel)}" data-edge-label="${esc(edgeLabel)}"></svg>
-        <figcaption><span class="caption" data-plan="${planCaption}" data-edge="${edgeCaption}">${planCaption}</span><button type="button" class="swap" data-show="a">View A</button></figcaption>
+        <figcaption><span class="caption"><span>${planCaption}</span><span>${edgeCaption}</span></span><button type="button" class="swap" data-show="a">View A</button></figcaption>
       </figure>
     </section>
     <section class="schedule" id="schedule" aria-labelledby="schedule-caption">
@@ -381,7 +393,7 @@ export function bodySheet(id: BodyId, sheet: Sheet, ctx: PageCtx): Rendered {
           ${rows}
         </tbody>
       </table>
-      <div class="steps" role="group" aria-label="Rows"><button type="button" class="step" data-step="-1" aria-label="Previous row">‹</button><button type="button" class="step" data-step="1" aria-label="Next row">›</button></div>
+      <div class="steps" role="group" aria-label="Rows">${stepButtons()}</div>
       <p class="legend"><span class="mark" aria-hidden="true"></span> drawn · <span class="pointer">click</span><span class="touch">tap</span> a row for NASA’s definition</p>
     </section>
   </main>

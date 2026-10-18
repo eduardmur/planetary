@@ -3,13 +3,15 @@
 
 /* Set on the root, which scrolls: the sticky header, the sticky block above the table (phones in
    portrait add View A to it), a row height at which all 20 rows fit at 1280 × 720, and the widest
-   the table and its docked sheet get on a tablet held upright. */
+   the table and its docked sheet get on a tablet held upright. A row brought into sight stays
+   under the sticky block and above a phone's home indicator. */
 html:has(.sheet-body) {
   --tabs-h: 44px;
   --sticky-h: var(--tabs-h);
   --row-h: clamp(24px, (100svh - 145px) / 20, 32px);
   --sheet-w: 440px;
   scroll-padding-top: var(--sticky-h);
+  scroll-padding-bottom: env(safe-area-inset-bottom);
 }
 
 .sheet-body {
@@ -77,6 +79,9 @@ html:has(.sheet-body) {
   line-height: 1;
 }
 .sheet-body .tabs nav {
+  /* The width of ‹ › where they show (below): the text under them is hidden, and the fade starts
+     beside them. */
+  --more-w: 0px;
   position: relative;
   flex: 1;
   min-width: 0;
@@ -94,18 +99,18 @@ html:has(.sheet-body) {
   scrollbar-width: none;
 }
 .sheet-body .tabs nav[data-more='left'] .strip {
-  mask-image: linear-gradient(to right, transparent, #000 30px);
+  mask-image: linear-gradient(to right, transparent var(--more-w), #000 calc(var(--more-w) + 30px));
 }
 .sheet-body .tabs nav[data-more='right'] .strip {
-  mask-image: linear-gradient(to left, transparent, #000 30px);
+  mask-image: linear-gradient(to left, transparent var(--more-w), #000 calc(var(--more-w) + 30px));
 }
 .sheet-body .tabs nav[data-more='both'] .strip {
   mask-image: linear-gradient(
     to right,
-    transparent,
-    #000 30px,
-    #000 calc(100% - 30px),
-    transparent
+    transparent var(--more-w),
+    #000 calc(var(--more-w) + 30px),
+    #000 calc(100% - var(--more-w) - 30px),
+    transparent calc(100% - var(--more-w))
   );
 }
 html:not(.js) .sheet-body .tabs .strip {
@@ -140,6 +145,9 @@ html:not(.js) .sheet-body .tabs .strip {
   right: 0;
 }
 @media (hover: hover) and (pointer: fine) {
+  .sheet-body .tabs nav {
+    --more-w: 20px;
+  }
   .sheet-body .tabs nav:is([data-more='left'], [data-more='both']) .more[data-dir='-1'],
   .sheet-body .tabs nav:is([data-more='right'], [data-more='both']) .more[data-dir='1'] {
     display: grid;
@@ -257,6 +265,10 @@ html:not(.js) .sheet-body .tabs .strip {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* In full; phones take the short form (below). */
+.sheet-body .view-a .caption .short {
+  display: none;
+}
 @container (max-width: 560px) {
   .sheet-body .view-a .hint {
     display: none;
@@ -271,6 +283,19 @@ html:not(.js) .sheet-body .tabs .strip {
 .sheet-body .view.key-plan figcaption {
   position: static;
   margin: 4px 14px 8px;
+}
+/* The plan's two captions, square on and edge-on, take one place, as tall as the taller of them, so
+   the plan keeps its size as it turns; the one shown sits at the foot. */
+.sheet-body .key-plan .caption {
+  display: grid;
+}
+.sheet-body .key-plan .caption > span {
+  grid-area: 1 / 1;
+  align-self: end;
+}
+.sheet-body .key-plan .caption:not([data-edge]) > :last-child,
+.sheet-body .key-plan .caption[data-edge] > :first-child {
+  visibility: hidden;
 }
 .sheet-body .view figcaption .letter {
   font-size: 18px;
@@ -312,9 +337,9 @@ html:not(.js) .sheet-body .tabs .strip {
   .sheet-body .view figcaption .swap {
     display: none;
   }
-  /* Room for the longer caption of the turned plan, so the plan does not shrink as it turns; one
-     line sits at the bottom. The two captions share one baseline: View A's line is set by its
-     text, and Pause's padding and border hang below it. */
+  /* Two lines at least, which most turned captions take; one line sits at the bottom. The two
+     views' captions share one baseline: View A's line is set by its text, and Pause's padding and
+     border hang below it. */
   .sheet-body .view.key-plan figcaption {
     min-height: calc(2 * 1.35em);
     align-items: flex-end;
@@ -437,13 +462,15 @@ html:not(.js) .sheet-body .tabs .strip {
   color: var(--ink-3-text);
 }
 /* The row stepper, at the right end of the caption line on the desktop layout: there while a
-   popover is open, which covers the rows around its own; showing it moves nothing. */
+   popover is open, which covers the rows around its own; showing it moves nothing. Under the header
+   it lies over rows, which it covers. */
 .sheet-body .steps {
   position: absolute;
   top: 4px;
   right: 8px;
   display: none;
   visibility: hidden;
+  background: var(--paper);
 }
 @media (min-width: 861px) and (min-height: 501px) {
   html.js .sheet-body .steps {
@@ -453,9 +480,8 @@ html:not(.js) .sheet-body .tabs .strip {
 .sheet-body .schedule:has(.def:popover-open) .steps {
   visibility: visible;
 }
-.sheet-body .steps .step {
-  width: 24px;
-  height: 24px;
+/* ‹ ›, on the stepper or in a popover's header. */
+.sheet-body .step {
   padding: 0 0 2px;
   font: 400 17px/1 var(--font);
   color: var(--ink-2);
@@ -463,17 +489,34 @@ html:not(.js) .sheet-body .tabs .strip {
   border: 0;
   cursor: pointer;
 }
-.sheet-body .steps .step[aria-disabled='true'] {
+.sheet-body .steps .step {
+  width: 24px;
+  height: 24px;
+}
+.sheet-body .step[aria-disabled='true'] {
   color: var(--ink-4);
   cursor: default;
 }
 @media (hover: hover) {
-  .sheet-body .steps .step:not([aria-disabled='true']):hover {
+  .sheet-body .step:not([aria-disabled='true']):hover {
     color: var(--ink);
   }
 }
-.sheet-body .steps .step:focus-visible {
+.sheet-body .step:focus-visible {
   outline-offset: -2px;
+}
+/* Fingers (tablets on their side): wider buttons, whose hit areas reach 4 px higher and 3 px lower,
+   short of the first row. */
+@media (pointer: coarse) {
+  .sheet-body .steps .step {
+    position: relative;
+    width: 36px;
+  }
+  .sheet-body .steps .step::after {
+    content: '';
+    position: absolute;
+    inset: -4px 0 -3px;
+  }
 }
 .sheet-body .legend .mark {
   margin: 0 2px 0 0;
@@ -553,16 +596,15 @@ html:not(.js) .sheet-body .tabs .strip {
     opacity: 0;
   }
 }
+/* The label, then ‹ › (see below) and × at the right. */
 .sheet-body .def header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   min-height: 34px;
   margin-right: -8px;
 }
 .sheet-body .def h2 {
-  margin: 0;
+  margin: 0 auto 0 0;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.12em;
@@ -578,6 +620,7 @@ html:not(.js) .sheet-body .tabs .strip {
   flex: none;
   width: 28px;
   height: 28px;
+  margin-left: 8px;
   padding: 0;
   font: 400 18px/1 var(--font);
   color: var(--ink-2);
@@ -594,6 +637,19 @@ html:not(.js) .sheet-body .tabs .strip {
   .sheet-body .def .close {
     width: 44px;
     height: 44px;
+  }
+}
+/* ‹ › before ×, where the stepper above the table is missing (phones, narrow windows): side by side,
+   each 36 px wide and as tall as the header. */
+.sheet-body .def .step {
+  display: none;
+  flex: none;
+  align-self: stretch;
+  width: 36px;
+}
+@media not ((min-width: 861px) and (min-height: 501px)) {
+  html.js .sheet-body .def .step {
+    display: block;
   }
 }
 .sheet-body .def p {
@@ -684,11 +740,13 @@ html:not(.js) .sheet-body .tabs .strip {
   border-left: 2px solid var(--ink-3);
 }
 /* NASA's link stays in sight at the foot of a popover that scrolls, over a fade that shows there is
-   more above it; it sits in the popover's bottom padding. */
+   more above it; it sits in the popover's bottom padding. The fade is the link's own top padding,
+   which starts under the last line (its margin folds into that block's), so only text scrolling
+   under it fades. */
 .sheet-body .def .src {
   position: sticky;
   bottom: -10px;
-  margin: -16px -12px -10px;
+  margin: -6px -12px -10px;
   padding: 26px 12px 10px;
   background: linear-gradient(transparent, var(--paper) 24px);
   font-size: 11.5px;
@@ -765,9 +823,14 @@ html:not(.js) .sheet-body .tabs .strip {
 .sheet-body ~ .info-dialog p a:has(.nowrap) {
   white-space: normal;
 }
-/* The row stepper exists only on the desktop layout. */
+/* ‹ › are above the table on the desktop layout, and in the definition elsewhere. */
+@media (min-width: 861px) and (min-height: 501px) {
+  .sheet-body ~ .info-dialog .steps-in {
+    display: none;
+  }
+}
 @media not ((min-width: 861px) and (min-height: 501px)) {
-  .sheet-body ~ .info-dialog .steps-note {
+  .sheet-body ~ .info-dialog .steps-above {
     display: none;
   }
 }
@@ -817,8 +880,12 @@ html:not(.js) .sheet-body .tabs .strip {
   .sheet-body .views.show-plan .view-a {
     display: none;
   }
-  .sheet-body .view-a .hint {
+  .sheet-body .view-a .hint,
+  .sheet-body .view-a .caption .long {
     display: none;
+  }
+  .sheet-body .view-a .caption .short {
+    display: inline;
   }
   .sheet-body .view figcaption,
   .sheet-body .view-a figcaption {
@@ -1000,12 +1067,14 @@ html:not(.js) .sheet-body .tabs .home::before {
     background: content-box CanvasText;
     opacity: 1;
   }
-  /* The fade under NASA's link becomes an opaque edge: text scrolling under it must not show. */
+  /* The fade under NASA's link becomes an opaque edge, right under the last line: text scrolling
+     under it must not show. */
   .sheet-body .def .src {
+    padding-top: 10px;
     background: Canvas;
     border-top: 1px solid CanvasText;
   }
-  .sheet-body .steps .step[aria-disabled='true'] {
+  .sheet-body .step[aria-disabled='true'] {
     color: GrayText;
   }
 }

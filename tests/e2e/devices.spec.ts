@@ -160,6 +160,41 @@ test.describe('iPhone 13 on its side', () => {
   });
 });
 
+test.describe('iPhone 13 on its side, over the home indicator', () => {
+  test.use(screen('iPhone 13 landscape'));
+  test('rows and popovers stay above the home indicator', async ({ page }, info) => {
+    only(info, 'chromium');
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      await cdp.send(
+        'Emulation.setSafeAreaInsetsOverride' as never,
+        { insets: { top: 0, left: 47, right: 47, bottom: 21 } } as never,
+      );
+    } catch {
+      test.skip(true, 'this Chromium cannot set safe-area insets');
+    }
+    await page.goto('uranus/');
+    await drawn(page);
+    const foot = (await page.evaluate(() => innerHeight)) - 21;
+    // The rows that a short screen moves to its foot, opened from the middle of the screen.
+    for (const key of ['orbitalInclination', 'surfacePressure', 'magneticField']) {
+      await show(page, null);
+      await page.evaluate((k) => {
+        const r = document.querySelector(`tr[data-key="${k}"]`)!.getBoundingClientRect();
+        scrollBy(0, r.top + r.height / 2 - innerHeight / 2);
+      }, key);
+      await settled(page);
+      await show(page, key);
+      await expect(page.locator(`#def-${key}`)).toBeVisible();
+      await page.waitForTimeout(200);
+      await settled(page);
+      const [r, d] = [await rect(page, `tr[data-key="${key}"]`), await rect(page, `#def-${key}`)];
+      expect(r.bottom, key).toBeLessThanOrEqual(foot + 0.5);
+      expect(d.bottom, key).toBeLessThanOrEqual(foot + 0.5);
+    }
+  });
+});
+
 // Too narrow for the table beside the drawings: the drawings go above it, and nothing scrolls
 // sideways (WCAG 1.4.10).
 for (const [name, opts] of [
@@ -222,8 +257,50 @@ test.describe('iPad Pro 11 held upright', () => {
   });
 });
 
+test.describe('iPad mini turned', () => {
+  test.use(screen('iPad Mini landscape'));
+  test('shows the drawing the selected row needs, either way up', async ({ page }, info) => {
+    only(info, 'webkit');
+    const views = page.locator('.views');
+    await page.goto('saturn/#orbitalPeriod');
+    await drawn(page);
+    // Both drawings on the desktop layout; upright, the one that draws the row: the key plan.
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expect(views).toHaveClass(/show-plan/);
+    await expect(page.locator('#key-plan')).toBeVisible();
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await show(page, 'diameter');
+    await expect(page.locator('#def-diameter')).toBeVisible();
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expect(views).not.toHaveClass(/show-plan/);
+    await expect(page.locator('#view-a')).toBeVisible();
+  });
+});
+
 test.describe('iPad mini on its side', () => {
   test.use(screen('iPad Mini landscape'));
+  test('the stepper takes a finger, and the notes say where it is', async ({ page }, info) => {
+    only(info, 'webkit');
+    await page.goto('saturn/#density');
+    await expect(page.locator('#def-density')).toBeVisible();
+    const [prev, next] = await Promise.all(
+      ['-1', '1'].map((d) => rect(page, `.steps .step[data-step="${d}"]`)),
+    );
+    expect(prev!.right - prev!.left).toBeGreaterThanOrEqual(36);
+    expect(next!.right - next!.left).toBeGreaterThanOrEqual(36);
+    // Just over ›: its hit area reaches a little higher than the glyph's box.
+    await page.touchscreen.tap((next!.left + next!.right) / 2, next!.top - 3);
+    await expect(page.locator('#def-gravity')).toBeVisible();
+    await page.locator('button.info').tap();
+    const text = await page
+      .locator('dialog#info .info-body ul')
+      .first()
+      .evaluate((ul) => (ul as HTMLElement).innerText);
+    expect(text).toContain(
+      'While a definition is open, ‹ › above the table step through the rows.',
+    );
+  });
+
   test('a tap just off Pause still finds it, and keeps the popover', async ({ page }, info) => {
     only(info, 'webkit');
     await page.goto('uranus/');

@@ -140,13 +140,18 @@ describe('body pages', () => {
     it(`${id}: the dialog's reading notes follow the input and the script`, () => {
       const list = root.querySelectorAll('dialog#info .info-body ul')[0]!;
       const lines = list.querySelectorAll('li');
-      // Double-click or double tap; ← → only with keys; the stepper only with a mouse.
+      // Double-click or double tap; ← → and ↑ ↓ only with keys; ‹ › for every input, above the
+      // table or in the definition (body.css shows the one the layout has).
       const reset = lines.find((l) => text(l).includes('to reset'))!;
       expect(reset.querySelector('.pointer')!.text).toBe('double-click');
       expect(reset.querySelector('.touch')!.text).toBe('double-tap');
       const tabsLine = lines.find((l) => text(l).startsWith('Tabs'))!;
       expect(tabsLine.querySelector('.pointer')!.text).toContain('← →');
-      expect(lines.find((l) => text(l).includes('‹ ›'))!.classList.contains('pointer')).toBe(true);
+      const steps = lines.find((l) => text(l).includes('‹ ›'))!;
+      expect(steps.classList.contains('pointer')).toBe(false);
+      expect(steps.querySelector('.pointer')!.text).toBe('↑ ↓ or ');
+      expect(steps.querySelector('.steps-above')!.text).toBe('above the table');
+      expect(steps.querySelector('.steps-in')!.text).toBe('in the definition');
       // What needs the script is .js-only; without it, a row still opens its definition.
       for (const l of lines.filter((l) => /drawing|Drag|Tabs|‹ ›/.test(text(l))))
         expect(l.classList.contains('js-only'), text(l)).toBe(true);
@@ -239,6 +244,24 @@ describe('body pages', () => {
     ).toBe(false);
   });
 
+  it('each popover has ‹ › before ×, with none before the first row or after the last', () => {
+    for (const [id] of dom)
+      for (const [i, p] of PARAMS.entries()) {
+        const header = popover(id, p.key).querySelector('header')!;
+        const buttons = header.querySelectorAll('button');
+        expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
+          'Previous row',
+          'Next row',
+          'Close',
+        ]);
+        expect(buttons.map((b) => b.getAttribute('aria-disabled') ?? '')).toEqual([
+          i === 0 ? 'true' : '',
+          i === PARAMS.length - 1 ? 'true' : '',
+          '',
+        ]);
+      }
+  });
+
   it('Orbital Velocity says what lights up, since no line is sized by it', () => {
     for (const [id] of dom) {
       const def = popover(id, 'orbitalVelocity');
@@ -253,6 +276,21 @@ describe('body pages', () => {
     expect(text(dom.get('saturn')!.querySelector('dialog#info'))).toContain(
       'KEY PLAN: SUN, BODY AND MOTION ARROW ARE SYMBOLS, NOT TO SCALE.',
     );
+  });
+
+  it('View A and the key plan carry each caption they show', () => {
+    for (const [id, root] of dom) {
+      const [long, short] = root.querySelectorAll('.view-a .caption > span');
+      expect(long!.getAttribute('data-edge-on')).toBe('Orbit plane edge-on');
+      // Phones take the short form, which fits a 320 px screen.
+      expect(['data-plan', 'data-tilt', 'data-edge-on'].map((a) => short!.getAttribute(a))).toEqual(
+        ['20° above orbit', 'Tilt true size', 'Orbit edge-on'],
+      );
+      // Square on and edge-on, both in place so that the plan keeps its size as it turns.
+      const plan = root.querySelectorAll('.key-plan .caption > span').map(text);
+      expect(plan, id).toHaveLength(2);
+      expect(plan[1]).toContain('edge-on');
+    }
   });
 
   it('no × Earth where NASA’s ratio is "Unknown" (the giants’ surface pressure)', () => {
@@ -273,9 +311,6 @@ describe('body pages', () => {
         steps.querySelectorAll('button.step').map((b) => b.getAttribute('aria-label')),
       ).toEqual(['Previous row', 'Next row']);
       expect(root.querySelector('table.main caption')!.querySelector('button')).toBeNull();
-      expect(root.querySelector('.view-a .caption')!.getAttribute('data-edge-on')).toBe(
-        'Orbit plane edge-on',
-      );
     }
   });
 

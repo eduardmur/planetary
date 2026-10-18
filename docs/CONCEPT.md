@@ -98,11 +98,13 @@ comparison table on the home page.
 On a body's sheet, content changes only on a click, a tap, Enter or Space; hovering changes only the
 cursor and a faint row wash. A row or a drawn line selects its parameter: the geometry turns yellow and
 NASA's definition opens in a popover under the row, or above it when there is more room there, within
-the table column (a sheet at the bottom of a phone held upright). It closes with ×, Esc, a second
-click or a click on blank paper. Nothing that opens pushes the layout. Drag sideways on view A to turn
-it, double-click to reset. The tabs and ← → move between bodies and keep the selected row. A pause
-button stops the motion; reduced-motion settings start paused. Deep links such as `/saturn/#obliquity`
-open a sheet with that row selected.
+the table column (a sheet at the bottom of a phone held upright). It closes with ×, Esc, a second click
+or a click on blank paper. While it is open, ‹ › step to the previous or next row, above the table on
+the desktop layout and in the popover's header elsewhere; the stepper above the table stays under the
+pointer as the page scrolls. ↑ ↓ step from the keyboard. Nothing that opens pushes the layout. Drag
+sideways on view A to turn it, double-click to reset. The tabs and ← → move between bodies and keep the
+selected row. A pause button stops the motion; reduced-motion settings start paused. Deep links such as
+`/saturn/#obliquity` open a sheet with that row selected.
 
 ## Build
 
