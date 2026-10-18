@@ -35,19 +35,39 @@ const PLANETS = [
 const simDate = (page: Page) =>
   page.evaluate(() => (window as unknown as Hooks).__pb.views.orrery.simDate);
 
+/** Once the crossfade from the last page is over, two frames on. While it runs, the pointer lands
+ *  on <html> (under load WebKit runs it well after the load event), and a loaded page may not be
+ *  laid out yet: WebKit gives the drawing its size and reports a mouse only when it first renders,
+ *  which moves the bodies and their links. */
+const settled = async (page: Page) => {
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every(
+        (a) => !(a.effect as KeyframeEffect | null)?.pseudoElement?.startsWith('::view-transition'),
+      ),
+  );
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null)))),
+  );
+};
+
 /** A body's position in the window, px. */
-const at = (page: Page, id: string) =>
-  page.evaluate((id) => {
+const at = async (page: Page, id: string) => {
+  await settled(page);
+  return page.evaluate((id) => {
     const r = document.getElementById('orrery')!.getBoundingClientRect();
     const [x, y] = (window as unknown as Hooks).__pb.views.orrery.positions()[id]!;
     return { x: r.left + x, y: r.top + y };
   }, id);
+};
 
 const days = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 86_400_000;
 
 /** The links that points of a body's symbol open, where no other symbol covers them. */
-const symbolHits = (page: Page, id: string) =>
-  page.evaluate((id) => {
+const symbolHits = async (page: Page, id: string) => {
+  await settled(page);
+  return page.evaluate((id) => {
     const o = (window as unknown as Hooks).__pb.views.orrery;
     const box = document.getElementById('orrery')!.getBoundingClientRect();
     const pos = o.positions(),
@@ -67,6 +87,7 @@ const symbolHits = (page: Page, id: string) =>
       }
     return [...hits];
   }, id);
+};
 
 test('the home page draws the schematic and nothing else', async ({ page }) => {
   const errors: string[] = [];
@@ -350,6 +371,11 @@ test('a click on a planet or on the Moon’s ring opens its page', async ({ page
   await expect(page).toHaveURL(/\/jupiter\/$/);
 
   await page.goto('?capture&date=2026-10-18');
+  // WebKit reports the mouse only once it has rendered the page, and the Moon's ring grows then.
+  await expect
+    .poll(() => page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches))
+    .toBe(true);
+  await settled(page);
   // A point of the Moon's ring that no planet's link covers.
   const ring = await page.evaluate(() => {
     const moon = document.querySelector('a[data-body="moon"]')!;
