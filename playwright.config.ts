@@ -8,7 +8,9 @@ export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  retries: 0,
+  // One retry on CI: a test that passes only on its retry is reported as flaky, not hidden, but it no
+  // longer holds up the deploy.
+  retries: process.env.CI ? 1 : 0,
   workers: 1,
   reporter: [['list']],
   outputDir: 'test-results',

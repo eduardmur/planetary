@@ -847,6 +847,8 @@ test('phones: ‹ › in the popover step through the rows, and the drawing foll
     const size0 = await page.locator('.views').boundingBox();
     await page.locator('#b-mass').tap();
     await expect(page.locator('#def-mass')).toBeVisible();
+    // The page scrolls the row into sight, and its popover with it: tap ‹ › where it comes to rest.
+    await settled(page);
     for (const key of keys.slice(1)) {
       const b = await rect(open(page).locator('.step[data-step="1"]'));
       expect(b.right - b.left).toBeGreaterThanOrEqual(36);
