@@ -140,13 +140,18 @@ describe('body pages', () => {
     it(`${id}: the dialog's reading notes follow the input and the script`, () => {
       const list = root.querySelectorAll('dialog#info .info-body ul')[0]!;
       const lines = list.querySelectorAll('li');
-      // Double-click or double tap; ← → only with keys; the stepper only with a mouse.
+      // Double-click or double tap; ← → and ↑ ↓ only with keys; ‹ › for every input, above the
+      // table or in the definition (body.css shows the one the layout has).
       const reset = lines.find((l) => text(l).includes('to reset'))!;
       expect(reset.querySelector('.pointer')!.text).toBe('double-click');
       expect(reset.querySelector('.touch')!.text).toBe('double-tap');
       const tabsLine = lines.find((l) => text(l).startsWith('Tabs'))!;
       expect(tabsLine.querySelector('.pointer')!.text).toContain('← →');
-      expect(lines.find((l) => text(l).includes('‹ ›'))!.classList.contains('pointer')).toBe(true);
+      const steps = lines.find((l) => text(l).includes('‹ ›'))!;
+      expect(steps.classList.contains('pointer')).toBe(false);
+      expect(steps.querySelector('.pointer')!.text).toBe('↑ ↓ or ');
+      expect(steps.querySelector('.steps-above')!.text).toBe('above the table');
+      expect(steps.querySelector('.steps-in')!.text).toBe('in the definition');
       // What needs the script is .js-only; without it, a row still opens its definition.
       for (const l of lines.filter((l) => /drawing|Drag|Tabs|‹ ›/.test(text(l))))
         expect(l.classList.contains('js-only'), text(l)).toBe(true);

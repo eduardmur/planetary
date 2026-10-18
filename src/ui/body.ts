@@ -188,8 +188,8 @@ export function initBody(data: PageData) {
 
   /**
    * Keep the selected row in sight. Docked: between the sticky block and the sheet, once the sheet
-   * is open and has its height. Otherwise the nearest way; on short screens the row goes to the edge
-   * that leaves its popover the most room.
+   * is open and has its height. Otherwise the nearest way, and on the desktop layout clear of the row
+   * stepper; on short screens the row goes to the edge that leaves its popover the most room.
    */
   function reveal(key: string, now = false) {
     const { row, def } = parts.get(key)!;
@@ -214,6 +214,14 @@ export function initBody(data: PageData) {
       block = top <= root.scrollHeight - innerHeight ? 'start' : 'end';
       // The side it will have there, kept while the page scrolls there, so it does not flip midway.
       pinned = { key, side: block === 'start' ? 'below' : 'above', until: performance.now() + 800 };
+    } else if (shown(stepper)) {
+      // Below the stepper, which is 2 px under the header or where the reader's steps hold it.
+      const r = row.getBoundingClientRect();
+      const top = Math.max(pad + 2, held?.top ?? 0) + stepper!.offsetHeight + 2;
+      const foot = innerHeight - (parseFloat(getComputedStyle(root).scrollPaddingBottom) || 0);
+      const dy = r.top < top ? r.top - top : Math.max(0, Math.min(r.bottom - foot, r.top - top));
+      if (Math.abs(dy) >= 1) scrollTo({ top: scrollY + dy, behavior: behavior(now) });
+      return;
     }
     row.scrollIntoView({ block, behavior: behavior(now) });
   }
@@ -244,11 +252,15 @@ export function initBody(data: PageData) {
     const floor = frameFoot <= innerHeight - safe ? frameFoot - 4 : innerHeight - safe;
     return { head, ceiling, floor };
   }
-  /** The stepper rides on the caption line and stays under the header once the table has scrolled
-   *  up under it, so the rows can be stepped through without moving the pointer. */
   /** Laid out at all (the stepper is only on the desktop layout); a fixed element has no
    *  offsetParent, so that cannot tell. */
   const shown = (el: Element | null) => !!el && el.getClientRects().length > 0;
+  /** Where the stepper was when the reader stepped to this row with it (its top): it stays there
+   *  while they step on, though the page scrolls to the next row, so the pointer never has to
+   *  follow it. Any other selection lets it go. */
+  let held: { top: number; key: string } | null = null;
+  /** The stepper rides on the caption line and stays under the header once the table has scrolled
+   *  up under it, so the rows can be stepped through without moving the pointer. */
   function placeStepper(head: number) {
     if (!stepper || !schedule) return;
     if (!current || !shown(stepper)) {
@@ -256,10 +268,10 @@ export function initBody(data: PageData) {
       return;
     }
     // Where its CSS puts it on the caption line (4 px down, 8 px in from the column's right edge),
-    // but on the screen, and never under the header.
+    // but on the screen, never under the header, and not above where the reader's steps hold it.
     const sc = schedule.getBoundingClientRect();
     stepper.style.position = 'fixed';
-    stepper.style.top = `${Math.max(head + 2, sc.top + 4)}px`;
+    stepper.style.top = `${Math.max(head + 2, sc.top + 4, held?.top ?? -Infinity)}px`;
     stepper.style.right = `${root.clientWidth - sc.right + 8}px`;
   }
   function place() {
@@ -378,6 +390,7 @@ export function initBody(data: PageData) {
   function sync(key: string | null) {
     const was = current;
     current = key;
+    if (held?.key !== key) held = null;
     if (was && was !== key) for (const k of PLACED) parts.get(was)!.def.style.removeProperty(k);
     for (const [k, p] of parts) {
       p.button.setAttribute('aria-expanded', String(k === key));
@@ -443,13 +456,31 @@ export function initBody(data: PageData) {
   }
   rove(buttons[0]!);
 
-  // The row stepper on the caption line: the previous or next row, without moving the pointer off it.
-  for (const b of steps)
-    b.addEventListener('click', () => {
-      if (!current) return;
-      const i = order.indexOf(current) + Number(b.dataset.step);
-      select(order[Math.max(0, Math.min(order.length - 1, i))]!);
+  // ‹ › step to the previous or next row: on the caption line (the desktop layout), which stays put
+  // meanwhile, or in the popover's header (elsewhere), where focus on one goes on to the same button
+  // in the next popover. ↑ ↓ step from either too.
+  function stepFrom(b: HTMLButtonElement, by: number) {
+    if (!current) return;
+    const key = order[Math.max(0, Math.min(order.length - 1, order.indexOf(current) + by))]!;
+    const inStepper = !!stepper?.contains(b);
+    const focused = document.activeElement === b;
+    if (inStepper) held = { top: stepper!.getBoundingClientRect().top, key };
+    select(key);
+    if (!inStepper && focused)
+      parts
+        .get(key)!
+        .def.querySelector<HTMLButtonElement>(`.step[data-step="${b.dataset.step}"]`)
+        ?.focus({ preventScroll: true });
+  }
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.step')) {
+    b.addEventListener('click', () => stepFrom(b, Number(b.dataset.step)));
+    b.addEventListener('keydown', (e) => {
+      const by = { ArrowUp: -1, ArrowDown: 1 }[e.key];
+      if (by === undefined || e.altKey || e.ctrlKey || e.metaKey) return;
+      e.preventDefault();
+      stepFrom(b, by);
     });
+  }
 
   // ---- Pointer --------------------------------------------------------------------------------
 
@@ -545,7 +576,7 @@ export function initBody(data: PageData) {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     if (e.key === 'Escape') {
       // The dialog closes itself; otherwise Esc lets go of the selection, and focus that was in
-      // the popover (or nowhere) goes back to its row.
+      // the popover or on the stepper (or nowhere) goes back to its row.
       if (document.querySelector('dialog[open]') || !current) return;
       const p = parts.get(current)!;
       const at = document.activeElement;
@@ -555,8 +586,8 @@ export function initBody(data: PageData) {
       return;
     }
     // ← → open the previous or next body, on the same row; in the table ↑ ↓ walk the rows and ← →
-    // the bodies. Arrows keep their own meaning in the drawings (turn), a popover, a dialog and form
-    // fields.
+    // the bodies. Arrows keep their own meaning in the drawings (turn), on the stepper (rows), in a
+    // popover, a dialog and form fields.
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     const n = tabs.length;
     const step = e.key === 'ArrowRight' ? 1 : n - 1;
@@ -567,7 +598,8 @@ export function initBody(data: PageData) {
       tabs[(j + step) % n]!.focus();
       return;
     }
-    if ((e.target as Element).closest('svg.drawing, .def, dialog, input, textarea, select')) return;
+    if ((e.target as Element).closest('svg.drawing, .steps, .def, dialog, input, textarea, select'))
+      return;
     const i = tabs.findIndex((t) => t.getAttribute('aria-current') === 'page');
     if (i < 0) return;
     flushHash();

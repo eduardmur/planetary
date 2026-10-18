@@ -462,13 +462,15 @@ html:not(.js) .sheet-body .tabs .strip {
   color: var(--ink-3-text);
 }
 /* The row stepper, at the right end of the caption line on the desktop layout: there while a
-   popover is open, which covers the rows around its own; showing it moves nothing. */
+   popover is open, which covers the rows around its own; showing it moves nothing. Under the header
+   it lies over rows, which it covers. */
 .sheet-body .steps {
   position: absolute;
   top: 4px;
   right: 8px;
   display: none;
   visibility: hidden;
+  background: var(--paper);
 }
 @media (min-width: 861px) and (min-height: 501px) {
   html.js .sheet-body .steps {
@@ -478,9 +480,8 @@ html:not(.js) .sheet-body .tabs .strip {
 .sheet-body .schedule:has(.def:popover-open) .steps {
   visibility: visible;
 }
-.sheet-body .steps .step {
-  width: 24px;
-  height: 24px;
+/* ‹ ›, on the stepper or in a popover's header. */
+.sheet-body .step {
   padding: 0 0 2px;
   font: 400 17px/1 var(--font);
   color: var(--ink-2);
@@ -488,17 +489,34 @@ html:not(.js) .sheet-body .tabs .strip {
   border: 0;
   cursor: pointer;
 }
-.sheet-body .steps .step[aria-disabled='true'] {
+.sheet-body .steps .step {
+  width: 24px;
+  height: 24px;
+}
+.sheet-body .step[aria-disabled='true'] {
   color: var(--ink-4);
   cursor: default;
 }
 @media (hover: hover) {
-  .sheet-body .steps .step:not([aria-disabled='true']):hover {
+  .sheet-body .step:not([aria-disabled='true']):hover {
     color: var(--ink);
   }
 }
-.sheet-body .steps .step:focus-visible {
+.sheet-body .step:focus-visible {
   outline-offset: -2px;
+}
+/* Fingers (tablets on their side): wider buttons, whose hit areas reach 4 px higher and 3 px lower,
+   short of the first row. */
+@media (pointer: coarse) {
+  .sheet-body .steps .step {
+    position: relative;
+    width: 36px;
+  }
+  .sheet-body .steps .step::after {
+    content: '';
+    position: absolute;
+    inset: -4px 0 -3px;
+  }
 }
 .sheet-body .legend .mark {
   margin: 0 2px 0 0;
@@ -578,16 +596,15 @@ html:not(.js) .sheet-body .tabs .strip {
     opacity: 0;
   }
 }
+/* The label, then ‹ › (see below) and × at the right. */
 .sheet-body .def header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   min-height: 34px;
   margin-right: -8px;
 }
 .sheet-body .def h2 {
-  margin: 0;
+  margin: 0 auto 0 0;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.12em;
@@ -603,6 +620,7 @@ html:not(.js) .sheet-body .tabs .strip {
   flex: none;
   width: 28px;
   height: 28px;
+  margin-left: 8px;
   padding: 0;
   font: 400 18px/1 var(--font);
   color: var(--ink-2);
@@ -619,6 +637,19 @@ html:not(.js) .sheet-body .tabs .strip {
   .sheet-body .def .close {
     width: 44px;
     height: 44px;
+  }
+}
+/* ‹ › before ×, where the stepper above the table is missing (phones, narrow windows): side by side,
+   each 36 px wide and as tall as the header. */
+.sheet-body .def .step {
+  display: none;
+  flex: none;
+  align-self: stretch;
+  width: 36px;
+}
+@media not ((min-width: 861px) and (min-height: 501px)) {
+  html.js .sheet-body .def .step {
+    display: block;
   }
 }
 .sheet-body .def p {
@@ -792,9 +823,14 @@ html:not(.js) .sheet-body .tabs .strip {
 .sheet-body ~ .info-dialog p a:has(.nowrap) {
   white-space: normal;
 }
-/* The row stepper exists only on the desktop layout. */
+/* ‹ › are above the table on the desktop layout, and in the definition elsewhere. */
+@media (min-width: 861px) and (min-height: 501px) {
+  .sheet-body ~ .info-dialog .steps-in {
+    display: none;
+  }
+}
 @media not ((min-width: 861px) and (min-height: 501px)) {
-  .sheet-body ~ .info-dialog .steps-note {
+  .sheet-body ~ .info-dialog .steps-above {
     display: none;
   }
 }
@@ -1038,7 +1074,7 @@ html:not(.js) .sheet-body .tabs .home::before {
     background: Canvas;
     border-top: 1px solid CanvasText;
   }
-  .sheet-body .steps .step[aria-disabled='true'] {
+  .sheet-body .step[aria-disabled='true'] {
     color: GrayText;
   }
 }

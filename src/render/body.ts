@@ -220,6 +220,13 @@ const conflict = (d: Discrepancy, i: number, list: Discrepancy[]): string => {
   return `<p class="conflict">${lead} on ${esc(d.what)}: ${pairs.join('; ')}.${d.note ? ` ${esc(d.note)}` : ''}</p>`;
 };
 
+const stepButton = (by: number, glyph: string, name: string, end: boolean) =>
+  `<button type="button" class="step" data-step="${by}" aria-label="${name}"${end ? ' aria-disabled="true"' : ''}>${glyph}</button>`;
+/** ‹ › for the previous and the next row (src/ui/body.ts steps with them); none before the first
+ *  row or after the last. */
+const stepButtons = (first = false, last = false) =>
+  stepButton(-1, '‹', 'Previous row', first) + stepButton(1, '›', 'Next row', last);
+
 /** What a drawn row lights up, where its value sizes nothing. */
 const SHOWN: Partial<Record<string, string>> = {
   orbitalVelocity:
@@ -230,7 +237,8 @@ const SHOWN: Partial<Record<string, string>> = {
  * A row's popover: the label and NASA's value, its ratio to Earth, NASA's definition verbatim, what
  * else the drawing takes from the body's page, where NASA's pages disagree, and the notes link.
  * "auto" without the script: one open at a time, closed by Esc or a click elsewhere. The script
- * makes them "manual" and keeps the one selection itself.
+ * makes them "manual" and keeps the one selection itself. ‹ › in the header step to the next row
+ * where there is no stepper above the table (body.css).
  */
 function popover(id: BodyId, key: string, isDrawn: boolean): string {
   const r = mainRow(key);
@@ -239,8 +247,9 @@ function popover(id: BodyId, key: string, isDrawn: boolean): string {
   // NASA's starred ratio sentence, unless the definition above already says it.
   const ratioNote = ratio?.note === '*' ? starNote(FACTS.definitions.ratio?.[key]?.text) : '';
   const shown = SHOWN[key];
+  const at = PARAMS.findIndex((p) => p.key === key);
   return `<div popover="auto" id="def-${key}" class="def" role="group" aria-labelledby="t-${key}">${[
-    `<header><h2 id="t-${key}">${label(r.label)}</h2><button type="button" class="close" popovertarget="def-${key}" popovertargetaction="hide" aria-label="Close">×</button></header>`,
+    `<header><h2 id="t-${key}">${label(r.label)}</h2>${stepButtons(at === 0, at === PARAMS.length - 1)}<button type="button" class="close" popovertarget="def-${key}" popovertargetaction="hide" aria-label="Close">×</button></header>`,
     `<p class="value"><b>${val(mainVal(id, key))}</b>${ratio?.text ? ` <span class="ratio">× Earth ${val(ratio)}</span>` : ''}</p>`,
     def ? `<p class="text">${esc(def.text)}</p>` : '',
     ratioNote && !def?.text.includes(ratioNote)
@@ -321,7 +330,7 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
       <ul>
         <li class="js-only">${act} a row, or a line in the drawing, for NASA’s definition; what it measures turns yellow.</li>
         <li class="nojs-only">${act} a row’s name for NASA’s definition.</li>
-        <li class="js-only pointer">While a definition is open, ↑ ↓<span class="steps-note"> or ‹ › above the table</span> step through the rows.</li>
+        <li class="js-only">While a definition is open, <span class="pointer">↑ ↓ or </span>‹ › <span class="steps-above">above the table</span><span class="steps-in">in the definition</span> step through the rows.</li>
         <li class="js-only">Rows marked ⊢⊣ are drawn. Drag view A to turn it; <span class="pointer">double-click</span><span class="touch">double-tap</span> to reset. Spin: 1 s = 1 h.</li>
         <li class="js-only">Tabs<span class="pointer"> and ← →</span> switch bodies and keep the selected row.</li>
         <li>PLANETARY at the top left (☉ on a phone or a small window) returns to the solar system.</li>
@@ -384,7 +393,7 @@ export function bodySheet(id: BodyId, sheet: Sheet, ctx: PageCtx): Rendered {
           ${rows}
         </tbody>
       </table>
-      <div class="steps" role="group" aria-label="Rows"><button type="button" class="step" data-step="-1" aria-label="Previous row">‹</button><button type="button" class="step" data-step="1" aria-label="Next row">›</button></div>
+      <div class="steps" role="group" aria-label="Rows">${stepButtons()}</div>
       <p class="legend"><span class="mark" aria-hidden="true"></span> drawn · <span class="pointer">click</span><span class="touch">tap</span> a row for NASA’s definition</p>
     </section>
   </main>

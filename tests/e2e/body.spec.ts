@@ -770,8 +770,11 @@ test('the row stepper walks the rows without moving the pointer', async ({ page,
   await expect(steps).toBeVisible();
   // Showing it moves nothing.
   expect(await rect(page.locator('tr[data-key="mass"]'))).toEqual(before);
-  await expect(page.locator('.step[data-step="-1"]')).toHaveAttribute('aria-disabled', 'true');
-  const next = page.locator('.step[data-step="1"]');
+  await expect(page.locator('.steps .step[data-step="-1"]')).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  const next = page.locator('.steps .step[data-step="1"]');
   await next.hover();
   for (let i = 0; i < 19; i++) await page.mouse.down().then(() => page.mouse.up());
   await expect(page.locator('#def-magneticField')).toBeVisible();
@@ -782,7 +785,7 @@ test('the row stepper walks the rows without moving the pointer', async ({ page,
   // A popover over its row leaves the stepper's line free.
   const [d, s] = [await rect(page.locator('#def-magneticField')), await rect(steps)];
   expect(d.top).toBeGreaterThanOrEqual(s.bottom - 0.5);
-  await page.locator('.step[data-step="-1"]').click();
+  await page.locator('.steps .step[data-step="-1"]').click();
   await expect(page.locator('#def-ringSystem')).toBeVisible();
 });
 
