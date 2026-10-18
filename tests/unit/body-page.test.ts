@@ -158,8 +158,29 @@ describe('body pages', () => {
     const rings = popover('saturn', 'ringSystem');
     expect(rings.querySelectorAll('dl.edges > div')).toHaveLength(8);
     expect(text(rings)).toContain('2022-04-19');
-    expect(text(rings)).toContain('Not drawn at this scale: G inner edge 166,000');
+    // Every row of NASA's ring sheet is drawn or named: inside the drawn rings, then beyond them.
+    expect(text(rings)).toContain(
+      'Not drawn: D outer edge 74,510 · Titan ringlet 77,871 · Maxwell gap/ringlet 87,491 · Keeler gap 136,487. Not drawn at this scale: G inner edge 166,000',
+    );
     expect(text(rings)).toContain('Wide = opaque rings, narrow = fainter, phantom');
+    // Neptune: NASA's names, so its note's "*" has something to refer to; the arcs are named.
+    const neptune = popover('neptune', 'ringSystem');
+    expect(neptune.querySelectorAll('dl.edges dt').map(text)).toEqual([
+      'Galle (1989N3R)',
+      'LeVerrier (1989N2R)',
+      'Arago (1989N4R*)',
+      'Adams (1989N1R)',
+    ]);
+    expect(text(neptune)).toContain(
+      'Not drawn: Lassell (1989N4R*) ~53,200 · Unnamed (indistinct) 61,953 · Arcs in Adams Ring (Courage, Liberté, Egalité 1, Egalité 2, Fraternité) 62,933: NASA gives no longitudes.',
+    );
+    expect(text(neptune)).toContain('(*Lassell and Arago were originally identified as one ring');
+    expect(text(neptune)).not.toContain('at this scale');
+    // Jupiter and Uranus draw every row inside their outermost drawn edge.
+    for (const id of ['jupiter', 'uranus'] as const) {
+      expect(text(popover(id, 'ringSystem'))).not.toContain('Not drawn:');
+      expect(text(popover(id, 'ringSystem'))).toContain('Not drawn at this scale: ');
+    }
 
     expect(also('mars', 'perihelion')).toContain('Longitude of perihelion (deg) 336.04084');
     expect(also('mars', 'orbitalInclination')).toContain('Longitude of ascending node (deg)');

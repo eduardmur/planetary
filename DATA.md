@@ -34,7 +34,11 @@ The JSON and CSV are also served with the site, at `/planetary/data/`.
    `(9.35°) = 90° − 80.65°`, derived from NASA's geocentric dipole latitude.
 4. **What NASA does not give is not drawn.** NASA gives no prime meridian, no direction for a dipole's
    offset, no longitudes for Neptune's ring arcs and no node or perigee longitude for the Moon, so
-   none of these appear; the sheets say so where it matters.
+   none of these appear, and Planetary says so where it matters.
+5. **Every ring row is accounted for.** A ring popover lists the edges drawn, under NASA's names, then
+   every other row of NASA's ring sheet by name and radius: the rows among the drawn rings that are
+   not drawn (Neptune's Adams arcs, whose longitudes NASA does not give, among them), and the rows
+   beyond the drawing's scale.
 
 ## Orbits and positions
 

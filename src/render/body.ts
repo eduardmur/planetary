@@ -14,7 +14,7 @@ import {
   type Discrepancy,
   type Section,
 } from '../data/index.ts';
-import { bodyModel, keyPlanModel } from '../data/model.ts';
+import { bodyModel, keyPlanModel, ringList } from '../data/model.ts';
 import { PARAMS } from '../content/params.ts';
 import { BODY_SHEETS, SHEET_COUNT, type Sheet } from '../content/sheets.ts';
 import { CAP, measure } from '../draw/lettering.ts';
@@ -138,20 +138,21 @@ function alsoDrawn(id: BodyId, key: string): string {
       return fromPage(items);
     }
     case 'ringSystem': {
+      // Every row of NASA's ring sheet: the edges drawn, under NASA's names, then those not drawn.
       const rings = page.rings;
-      if (!b.rings || !rings) return '';
-      const edges = b.rings.edges
+      const list = ringList(id);
+      if (!list || !rings) return '';
+      const edges = list.drawn
         .map(
           (e) =>
             `<div><dt>${esc(ringName(e.name))}</dt><dd>${esc(e.text)}</dd><dd>${LINE[e.line]}</dd></div>`,
         )
         .join('');
-      const notDrawn = b.rings.notDrawn.length
-        ? `<p>Not drawn at this scale: ${b.rings.notDrawn.map(esc).join(' · ')}.</p>`
-        : '';
+      const notDrawn = (lead: string, rows: string[]) =>
+        rows.length ? `<p>${lead}: ${rows.map(esc).join(' · ')}.</p>` : '';
       return section(
         `${esc(page.name)} rings fact sheet <time>${isoDate(rings.lastUpdated)}</time>`,
-        `<p class="k">Ring edges drawn <span class="unit">(km)</span></p><dl class="edges">${edges}</dl>${notDrawn}<p>Wide = opaque rings, narrow = fainter, phantom = optical depth under about 0.01.</p>${rings.notes.map((n) => `<p class="n">${esc(n)}</p>`).join('')}`,
+        `<p class="k">Ring edges drawn <span class="unit">(km)</span></p><dl class="edges">${edges}</dl>${notDrawn('Not drawn', list.omitted)}${notDrawn('Not drawn at this scale', list.beyond)}<p>Wide = opaque rings, narrow = fainter, phantom = optical depth under about 0.01.</p>${rings.notes.map((n) => `<p class="n">${esc(n)}</p>`).join('')}`,
       );
     }
     case 'magneticField': {
