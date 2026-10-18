@@ -502,8 +502,8 @@ html:not(.js) .sheet-body .tabs .strip {
   anchor-name: --row;
 }
 .sheet-body .def {
-  /* Clearance under the header for a popover over its row, and over the foot of the frame for one
-     under it. The script sets the room on each side from the page as it scrolls. */
+  /* Anchored to the open row (the script places it itself, see [data-side] below), clear of the
+     header when over its row and of the frame's foot when under it. */
   --clear: calc(var(--gap) + var(--w-frame) + var(--tabs-h));
   --foot: calc(var(--gap) + var(--w-frame) + env(safe-area-inset-bottom));
   position-anchor: --row;
