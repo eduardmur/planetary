@@ -9,13 +9,27 @@ import { homeSheet } from './home.ts';
 
 export type { PageCtx, PageData, Rendered } from './common.ts';
 
+/**
+ * .js lays the page out for its script. src/main.ts adds .live once the script has set the page up;
+ * if the bundle fails to load or throws, .js comes off again at DOMContentLoaded (which waits for a
+ * module script) and the page falls back to its layout without JavaScript.
+ */
+const JS_CLASS = `{const h=document.documentElement;h.classList.add('js');addEventListener('DOMContentLoaded',()=>{if(!h.classList.contains('live'))h.classList.remove('js')})}`;
+/**
+ * The crossfade between pages, opted into before the first render: from the bundled stylesheet,
+ * which can arrive just before it, Chromium can read a stale opt-in and throw.
+ */
+const VIEW_TRANSITIONS =
+  '@view-transition{navigation:auto}@media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}';
+
 function head(sheet: Sheet, ctx: PageCtx, r: Rendered): string {
   const url = ctx.site + sheet.slug + (sheet.slug ? '/' : '');
   const og = `${ctx.site}og/${sheet.id}.png`;
   return `<meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>${esc(r.title)}</title>
-    <script>document.documentElement.classList.add('js')</script>
+    <script>${JS_CLASS}</script>
+    <style>${VIEW_TRANSITIONS}</style>
     <meta name="description" content="${esc(r.description)}" />
     <link rel="canonical" href="${url}" />
     <meta name="theme-color" content="#1d4580" />

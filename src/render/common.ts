@@ -71,12 +71,21 @@ export function infoButton(label = 'About, notes and sources'): string {
 }
 
 /**
+ * A title block's items on one line, "PL-08 · SHEET 8 / 11 · …": each item is kept whole, and a line
+ * breaks only after a "·", never before one. Items are HTML.
+ */
+export function titleLine(items: string[]): string {
+  return items.map((s) => `<span class="nowrap">${s}</span>`).join('&nbsp;· ');
+}
+
+/**
  * The page's one dialog. Without JavaScript it is shown inline after the sheet (see sheet.css), so
- * nothing in it is lost.
+ * nothing in it is lost. Its heading takes focus when the dialog opens: src/main.ts adds autofocus,
+ * so that a page without the script does not load scrolled down to the notes.
  */
 export function infoDialog(title: string, body: string): string {
   return `<dialog id="info" class="info-dialog" closedby="any" aria-labelledby="info-title">
-    <header><h2 id="info-title" tabindex="-1" autofocus>${title}</h2><button type="button" class="close" commandfor="info" command="close" aria-label="Close">×</button></header>
+    <header><h2 id="info-title" tabindex="-1">${title}</h2><button type="button" class="close" commandfor="info" command="close" aria-label="Close">×</button></header>
     <div class="info-body">${body}</div>
   </dialog>`;
 }
