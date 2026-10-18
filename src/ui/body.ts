@@ -215,12 +215,14 @@ export function initBody(data: PageData) {
       // The side it will have there, kept while the page scrolls there, so it does not flip midway.
       pinned = { key, side: block === 'start' ? 'below' : 'above', until: performance.now() + 800 };
     } else if (shown(stepper)) {
-      // Below the stepper, which is 2 px under the header or where the reader's steps hold it.
+      // Below the stepper, which is 2 px under the header or where the reader's steps hold it. A row
+      // stepped to with it comes at once: a smooth scroll would leave the stepper over it for a few
+      // frames.
       const r = row.getBoundingClientRect();
       const top = Math.max(pad + 2, held?.top ?? 0) + stepper!.offsetHeight + 2;
       const foot = innerHeight - (parseFloat(getComputedStyle(root).scrollPaddingBottom) || 0);
       const dy = r.top < top ? r.top - top : Math.max(0, Math.min(r.bottom - foot, r.top - top));
-      if (Math.abs(dy) >= 1) scrollTo({ top: scrollY + dy, behavior: behavior(now) });
+      if (Math.abs(dy) >= 1) scrollTo({ top: scrollY + dy, behavior: behavior(now || !!held) });
       return;
     }
     row.scrollIntoView({ block, behavior: behavior(now) });
@@ -241,12 +243,19 @@ export function initBody(data: PageData) {
   const stepper = document.querySelector<HTMLElement>('.steps');
   const table = document.querySelector<HTMLTableElement>('table.main');
   const PLACED = ['top', 'bottom', 'left', 'width', 'max-height', 'min-height', 'clip-path'];
-  /** The room a popover has: under the header (on the desktop layout, under the row stepper) and
-   *  above the foot of the frame, or of the screen (above the home indicator) where the frame runs
-   *  on below it. */
+  /** The room a popover has: under the header (on the desktop layout, from the first rule under the
+   *  row stepper) and above the foot of the frame, or of the screen (above the home indicator) where
+   *  the frame runs on below it. */
   function bounds() {
     const head = header?.getBoundingClientRect().bottom ?? 0;
-    const ceiling = shown(stepper) ? Math.max(head, stepper!.getBoundingClientRect().bottom) : head;
+    let ceiling = head;
+    if (shown(stepper)) {
+      // A row's rule, not the stepper's foot, which can lie across a row: the row the stepper stands
+      // on stays whole above a popover, but for its end under the stepper.
+      const under = Math.max(head, stepper!.getBoundingClientRect().bottom);
+      ceiling =
+        rowEls.map((r) => r.getBoundingClientRect().top).find((v) => v >= under - 0.5) ?? under;
+    }
     const frameFoot = frame?.getBoundingClientRect().bottom ?? Infinity;
     const safe = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
     const floor = frameFoot <= innerHeight - safe ? frameFoot - 4 : innerHeight - safe;

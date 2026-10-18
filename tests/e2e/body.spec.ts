@@ -1067,15 +1067,72 @@ const stepperClear = (page: Page) =>
       opaque: bg.startsWith('rgb(') || bg.endsWith(', 1)'),
     };
   });
+type Point = { x: number; y: number };
+/** The stepper's button at a point, by its label. */
+const stepAt = (page: Page, { x, y }: Point) =>
+  page.evaluate(
+    ([x, y]) => document.elementFromPoint(x!, y!)?.closest('.steps .step')?.ariaLabel,
+    [x, y],
+  );
+/** In every frame from now until the page rests: the stepper's buttons found at the point, and
+ *  whether the stepper lay over any part of the selected row. */
+const everyFrame = (page: Page, { x, y }: Point) =>
+  page.evaluate(
+    ([x, y]) =>
+      new Promise<{ at: string[]; over: boolean }>((done) => {
+        const steps = document.querySelector('.schedule > .steps')!;
+        const at = new Set<string>();
+        let over = false,
+          last = NaN,
+          still = 0;
+        const frame = () => {
+          at.add(document.elementFromPoint(x!, y!)?.closest('.steps .step')?.ariaLabel ?? '');
+          const s = steps.getBoundingClientRect();
+          const r = document.querySelector('tr.hot')!.getBoundingClientRect();
+          if (Math.min(s.bottom, r.bottom) - Math.max(s.top, r.top) > 0.5) over = true;
+          still = scrollY === last ? still + 1 : 0;
+          last = scrollY;
+          if (still < 8) requestAnimationFrame(frame);
+          else done({ at: [...at], over });
+        };
+        frame();
+      }),
+    [x, y],
+  );
+/** Lines of the caption and the rows that an edge of the open popover cuts, with more than 3 px of
+ *  the line in sight on each side of it. */
+const cutLines = (page: Page) =>
+  page.evaluate(() => {
+    const d = document.querySelector('.def:popover-open')!.getBoundingClientRect();
+    const head = document.querySelector('.tabs')!.getBoundingClientRect().bottom;
+    const range = document.createRange();
+    const cut: string[] = [];
+    for (const el of document.querySelectorAll(
+      'table.main caption, tr[data-key] th button, tr[data-key] > td',
+    ))
+      for (const node of el.childNodes) {
+        if (node instanceof Element && node.matches('.def')) continue;
+        range.selectNodeContents(node);
+        for (const t of range.getClientRects()) {
+          if (t.height < 3 || t.right <= d.left || t.left >= d.right) continue;
+          for (const edge of [d.top, d.bottom])
+            if (Math.max(t.top, head) < edge - 3 && Math.min(t.bottom, innerHeight) > edge + 3)
+              cut.push(`${el.closest('tr')?.dataset.key ?? 'caption'} at ${Math.round(edge)}`);
+        }
+      }
+    return [...new Set(cut)];
+  });
 
 // Windows short enough to scroll: stepping to the foot of the table scrolls the page, and stepping
 // back scrolls it up again.
-for (const viewport of [
-  { width: 1280, height: 580 },
-  { width: 960, height: 547 },
-]) {
-  test.describe(`at ${viewport.width} × ${viewport.height}`, () => {
-    test.use({ viewport });
+for (const [viewport, deviceScaleFactor] of [
+  [{ width: 1280, height: 580 }, 1],
+  [{ width: 1280, height: 554 }, 1],
+  [{ width: 960, height: 547 }, 1],
+  [{ width: 960, height: 547 }, 2],
+] as const) {
+  test.describe(`at ${viewport.width} × ${viewport.height}, ×${deviceScaleFactor}`, () => {
+    test.use({ viewport, deviceScaleFactor });
     test('the stepper stays under a pointer that does not move, clear of the row', async ({
       page,
       isMobile,
@@ -1086,32 +1143,26 @@ for (const viewport of [
       await page.locator('#b-mass').click();
       await expect(page.locator('#def-mass')).toBeVisible();
       // The mouse goes to ›, clicks 19 times, goes 24 px left to ‹ and clicks 19 times.
-      const at: Record<string, { x: number; y: number }> = {};
+      const at: Record<string, Point> = {};
       for (const dir of ['1', '-1']) {
         const b = await rect(page.locator(`.steps .step[data-step="${dir}"]`));
         at[dir] = { x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 };
       }
-      const under = ({ x, y }: { x: number; y: number }) =>
-        page.evaluate(
-          ([x, y]) => document.elementFromPoint(x!, y!)?.closest('.steps .step')?.ariaLabel,
-          [x, y],
-        );
       for (const [dir, label] of [
         ['1', 'Next row'],
         ['-1', 'Previous row'],
       ] as const) {
         await page.mouse.move(at[dir]!.x, at[dir]!.y);
         for (let i = 0; i < 19; i++) {
-          expect(await under(at[dir]!), `${label} ${i + 1}`).toBe(label);
+          const step = `${label} ${i + 1}`;
+          expect(await stepAt(page, at[dir]!), step).toBe(label);
           await page.mouse.down();
           await page.mouse.up();
-          // Under it as the page scrolls, and clear of the row once it rests.
-          expect(await under(at[dir]!), `${label} ${i + 1}, scrolling`).toBe(label);
-          await settled(page);
-          expect(await stepperClear(page), `${label} ${i + 1}`).toEqual({
-            clear: true,
-            opaque: true,
-          });
+          // Under the pointer in every frame as the page scrolls, and never over the row.
+          expect(await everyFrame(page, at[dir]!), step).toEqual({ at: [label], over: false });
+          expect(await stepperClear(page), step).toEqual({ clear: true, opaque: true });
+          // The popover's edges lie on rules, wherever the stepper is held.
+          expect(await cutLines(page), step).toEqual([]);
         }
       }
       await expect(page.locator('#def-mass')).toBeVisible();
@@ -1130,11 +1181,19 @@ for (const viewport of [
       await settled(page);
       await page.locator('#b-magneticField').click();
       await expect(page.locator('#def-magneticField')).toBeVisible();
-      const previous = page.locator('.steps .step[data-step="-1"]');
+      const previous = await rect(page.locator('.steps .step[data-step="-1"]'));
+      const at = {
+        x: (previous.left + previous.right) / 2,
+        y: (previous.top + previous.bottom) / 2,
+      };
+      await page.mouse.move(at.x, at.y);
       for (let i = 0; i < 19; i++) {
-        await previous.click();
-        await settled(page);
-        expect(await stepperClear(page), `step ${i + 1}`).toEqual({ clear: true, opaque: true });
+        const step = `step ${i + 1}`;
+        await page.mouse.down();
+        await page.mouse.up();
+        expect(await everyFrame(page, at), step).toEqual({ at: ['Previous row'], over: false });
+        expect(await stepperClear(page), step).toEqual({ clear: true, opaque: true });
+        expect(await cutLines(page), step).toEqual([]);
       }
       await expect(page.locator('#def-mass')).toBeVisible();
     });
