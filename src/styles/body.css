@@ -271,6 +271,16 @@ html:has(.sheet-body) {
   .sheet-body .view figcaption .swap {
     display: none;
   }
+  /* Room for the longer caption of the turned plan, so the plan does not shrink as it turns; one
+     line sits at the bottom, level with View A's caption. */
+  .sheet-body .view.key-plan figcaption {
+    min-height: calc(2 * 1.35em);
+    align-items: flex-end;
+  }
+  /* Pause and Play take the same width. */
+  .sheet-body #pause {
+    min-width: 6em;
+  }
 }
 
 /* ---- NASA's table ----------------------------------------------------------------------------- */
