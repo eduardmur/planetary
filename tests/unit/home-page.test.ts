@@ -1,9 +1,10 @@
 // The home page as built: the bodies' links, nothing of the old general arrangement, and behind "?"
 // the notes that say how the schematic is drawn, with NASA's sources and dates.
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { sheetById } from '../../src/content/sheets.ts';
-import { FACTS } from '../../src/data/index.ts';
+import { DISCREPANCIES, FACTS } from '../../src/data/index.ts';
 import { BODY_IDS } from '../../src/data/types.ts';
 import { renderPage } from '../../src/render/page.ts';
 
@@ -45,6 +46,41 @@ describe('home page', () => {
     expect(dialog).toContain('AT LEAST 6 px');
   });
 
+  it('gives the symbols’ size rule in words', () => {
+    expect(dialog).toContain(
+      'BODIES ARE SYMBOLS: SYMBOL DIAMETER GROWS AS THE SQUARE ROOT OF NASA’S DIAMETER, AT LEAST 6 px.',
+    );
+  });
+
+  it('says which of NASA’s tables each part of an orbit comes from', () => {
+    expect(dialog).toContain(
+      'ORBITS FROM NASA’S MAIN-TABLE PERIHELION, APHELION AND INCLINATION; NODE, PERIHELION DIRECTION AND POSITIONS FROM THE J2000 MEAN ELEMENTS (TWO-BODY)',
+    );
+  });
+
+  it('letters its notes in the shipped font, but for ♈ and the superscript of 10⁶', () => {
+    // The unicode ranges of the IBM Plex Sans Condensed files the page loads.
+    const css = readFileSync(
+      new URL('../../node_modules/@fontsource/ibm-plex-sans-condensed/400.css', import.meta.url),
+      'utf8',
+    );
+    const ranges = [...css.matchAll(/unicode-range:([^;]+);/g)].flatMap((m) =>
+      m[1]!.split(',').map((r) => {
+        const [a, b] = r.trim().slice(2).split('-');
+        return [parseInt(a!, 16), parseInt(b ?? a!, 16)] as const;
+      }),
+    );
+    const notes = dialog
+      .match(/<ol class="drafting">([\s\S]*?)<\/ol>/)![1]!
+      .replace(/<[^>]+>/g, '');
+    const fallback = [...new Set(notes)].filter((c) => {
+      const u = c.codePointAt(0)!;
+      return !ranges.some(([a, b]) => u >= a && u <= b);
+    });
+    // ∝ and √ came from fallback fonts at the wrong size; these two read well.
+    expect(fallback.sort()).toEqual(['⁶', '♈', '︎'].sort());
+  });
+
   it('describes itself without claiming a true scale', () => {
     const description = html.match(/<meta name="description" content="([^"]*)"/)![1]!;
     expect(description).not.toMatch(/true scale|drawn to scale/i);
@@ -70,9 +106,22 @@ describe('home page', () => {
     expect(dialog).toContain(`href="${ctx.repo}/blob/main/data/discrepancies.md"`);
   });
 
-  it('ends with its title block on one line', () => {
+  it('counts NASA’s conflicts as conflicts', () => {
+    const n = DISCREPANCIES.length;
+    expect(n).toBeGreaterThan(1);
+    expect(dialog).toContain(`Where NASA’s pages disagree (${n} conflicts) ↗</a>`);
+  });
+
+  it('ends with its title block, broken only after a "·"', () => {
+    const items = [
+      'PL-01',
+      'SHEET 1 / 11',
+      'SOLAR SYSTEM',
+      'SCHEMATIC, NOT TO SCALE',
+      'ISSUED 2026-10-18',
+    ];
     expect(dialog).toContain(
-      'PL-01 · SHEET 1 / 11 · SOLAR SYSTEM · SCHEMATIC, NOT TO SCALE · ISSUED <span class="nowrap">2026-10-18</span>',
+      `<p class="label">${items.map((s) => `<span class="nowrap">${s}</span>`).join('&nbsp;· ')}</p>`,
     );
   });
 
