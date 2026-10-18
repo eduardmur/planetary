@@ -101,7 +101,7 @@ pages change.
 There is no WebGL and no framework. A small renderer in `src/draw/` projects spheroids, rings and orbits
 with an orthographic camera, finds the hidden lines analytically and writes SVG. The lettering uses the
 single-stroke Hershey font, drawn with the same pen as the lines. Each sheet is a static HTML page with
-its table already in place, and the client script is about 32 kB gzipped.
+its table already in place, and the client script is about 35 kB gzipped.
 
 ## Credits and licences
 
