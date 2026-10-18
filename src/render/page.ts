@@ -21,6 +21,11 @@ const JS_CLASS = `{const h=document.documentElement;h.classList.add('js');addEve
  */
 const VIEW_TRANSITIONS =
   '@view-transition{navigation:auto}@media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}';
+/**
+ * Back and Forward skip it: while it runs, a tap lands on the picture of the old page and is lost.
+ * Without the Navigation API a traversal cannot be told, and the crossfade stays.
+ */
+const NO_FADE_BACK = `addEventListener('pagereveal',e=>{if(self.navigation?.activation?.navigationType==='traverse')e.viewTransition?.skipTransition()})`;
 
 function head(sheet: Sheet, ctx: PageCtx, r: Rendered): string {
   const url = ctx.site + sheet.slug + (sheet.slug ? '/' : '');
@@ -28,7 +33,7 @@ function head(sheet: Sheet, ctx: PageCtx, r: Rendered): string {
   return `<meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>${esc(r.title)}</title>
-    <script>${JS_CLASS}</script>
+    <script>${JS_CLASS}${NO_FADE_BACK}</script>
     <style>${VIEW_TRANSITIONS}</style>
     <meta name="description" content="${esc(r.description)}" />
     <link rel="canonical" href="${url}" />
