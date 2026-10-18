@@ -160,8 +160,8 @@ export function initSheet(data: PageData) {
     const side = r.top - head > innerHeight - r.bottom ? 'above' : 'below';
     if (def.dataset.side !== side) def.dataset.side = side;
   }
-  addEventListener('scroll', place, { passive: true });
-  addEventListener('resize', place);
+  window.addEventListener('scroll', place, { passive: true });
+  window.addEventListener('resize', place);
 
   /** Bring the page in line with the selection: rows, views, captions, the URL and the tabs. */
   function sync(key: string | null) {
@@ -303,7 +303,7 @@ export function initSheet(data: PageData) {
   window.addEventListener('hashchange', () => select(hashKey(), { instant: true }));
 
   // Where the tab strip scrolls (phones, narrow windows), start with this body's tab in the middle,
-  // and again once the lettering's font has narrowed the tabs.
+  // and again once the condensed web font has narrowed the tabs.
   const strip = document.querySelector<HTMLElement>('.tabs .strip');
   const here = strip?.querySelector<HTMLElement>('[aria-current="page"]');
   const centre = () => {
