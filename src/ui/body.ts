@@ -315,7 +315,11 @@ export function initBody(data: PageData) {
       const top = row.getBoundingClientRect().bottom + 4;
       const last = rowEls.at(-1)!.getBoundingClientRect().bottom;
       const stops = [...tops, last, ...(leg && leg.top > last ? [leg.bottom + 3] : [])];
-      const y = stops.find((v) => v >= d.bottom - 0.5 && v <= floor) ?? floor;
+      // A rule beyond the room runs it to the end of the room; past the last rule there is no text
+      // left to cut, and the popover keeps its own height.
+      const next = stops.find((v) => v >= d.bottom - 0.5);
+      const y =
+        next === undefined ? (floor - d.bottom < LINE ? floor : d.bottom) : Math.min(next, floor);
       def.style.minHeight = `${y - top}px`;
     }
   }

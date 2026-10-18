@@ -690,11 +690,13 @@ html:not(.js) .sheet-body .tabs .strip {
   border-left: 2px solid var(--ink-3);
 }
 /* NASA's link stays in sight at the foot of a popover that scrolls, over a fade that shows there is
-   more above it; it sits in the popover's bottom padding. */
+   more above it; it sits in the popover's bottom padding. The fade is the link's own top padding,
+   which starts under the last line (its margin folds into that block's), so only text scrolling
+   under it fades. */
 .sheet-body .def .src {
   position: sticky;
   bottom: -10px;
-  margin: -16px -12px -10px;
+  margin: -6px -12px -10px;
   padding: 26px 12px 10px;
   background: linear-gradient(transparent, var(--paper) 24px);
   font-size: 11.5px;
@@ -1006,8 +1008,10 @@ html:not(.js) .sheet-body .tabs .home::before {
     background: content-box CanvasText;
     opacity: 1;
   }
-  /* The fade under NASA's link becomes an opaque edge: text scrolling under it must not show. */
+  /* The fade under NASA's link becomes an opaque edge, right under the last line: text scrolling
+     under it must not show. */
   .sheet-body .def .src {
+    padding-top: 10px;
     background: Canvas;
     border-top: 1px solid CanvasText;
   }
