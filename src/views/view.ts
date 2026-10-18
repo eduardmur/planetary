@@ -33,8 +33,11 @@ export abstract class View {
   ox = 0;
   oy = 0;
 
-  /** Called once when a press on the view becomes a drag. */
-  onDrag: (() => void) | null = null;
+  /** Called when the reader turns the view: as a press becomes a drag, on an arrow key, on Home. */
+  onTurn: (() => void) | null = null;
+  /** Called after every turn by the reader (each step of a drag, each key, each reset), once the
+   *  camera has its new orientation or is on its way there. */
+  onTurned: (() => void) | null = null;
 
   protected home: Orientation;
   /** Turntable views turn about the vertical only, at a fixed elevation. */
@@ -170,18 +173,23 @@ export abstract class View {
     if (reducedMotion()) this.camera.set(this.home);
     else this.camera.animateTo(this.home, performance.now());
     this.redraw();
+    this.onTurned?.();
   }
 
   private attachPointer() {
     const svg = this.svg;
     let last: { x: number; y: number; id: number } | null = null;
     let start = { x: 0, y: 0 };
+    /** The previous tap by a finger or pen, and when two of them last reset the view. */
+    let tap: { t: number; x: number; y: number } | null = null;
+    let tapReset = -Infinity;
     svg.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       last = { x: e.clientX, y: e.clientY, id: e.pointerId };
       start = { x: e.clientX, y: e.clientY };
       // A press that moves more than a few pixels is a drag, not a tap (read by click handlers).
       svg.dataset.dragged = '0';
+      delete svg.dataset.dbltap;
       svg.setPointerCapture(e.pointerId);
       svg.classList.add('dragging');
     });
@@ -191,19 +199,42 @@ export abstract class View {
         dy = e.clientY - last.y;
       if (svg.dataset.dragged !== '1' && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) {
         svg.dataset.dragged = '1';
-        this.onDrag?.();
+        this.onTurn?.();
       }
       last = { x: e.clientX, y: e.clientY, id: e.pointerId };
       this.camera.orbit(-dx * 0.008, this.turntable ? 0 : dy * 0.008);
       this.redraw();
+      this.onTurned?.();
     });
     const end = (e: PointerEvent) => {
       if (last && e.pointerId === last.id) last = null;
       svg.classList.remove('dragging');
     };
-    svg.addEventListener('pointerup', end);
+    // A double tap resets the view too. Browsers send no dblclick for it where touch-action is not
+    // auto (iOS), so it is told here; data-dbltap tells the click that follows (iOS gives it detail 1).
+    svg.addEventListener('pointerup', (e) => {
+      end(e);
+      if (e.pointerType === 'mouse' || svg.dataset.dragged === '1') {
+        tap = null;
+        return;
+      }
+      if (
+        tap &&
+        e.timeStamp - tap.t < 350 &&
+        Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 24
+      ) {
+        tap = null;
+        tapReset = e.timeStamp;
+        svg.dataset.dbltap = '1';
+        this.resetView();
+      } else tap = { t: e.timeStamp, x: e.clientX, y: e.clientY };
+    });
     svg.addEventListener('pointercancel', end);
-    svg.addEventListener('dblclick', () => this.resetView());
+    svg.addEventListener('dblclick', (e) => {
+      // Android also sends a dblclick for a double tap that has already reset the view.
+      if (e.timeStamp - tapReset < 400) return;
+      this.resetView();
+    });
     // Keyboard: arrows orbit, Home resets (the svg is focusable).
     svg.addEventListener('keydown', (e) => {
       const step = 5 * (Math.PI / 180);
@@ -218,10 +249,13 @@ export abstract class View {
       const m = map[e.key];
       if (m) {
         this.camera.orbit(m[0], m[1]);
+        this.onTurn?.();
         this.redraw();
+        this.onTurned?.();
         e.preventDefault();
         e.stopPropagation();
       } else if (e.key === 'Home') {
+        this.onTurn?.();
         this.resetView();
         e.preventDefault();
       }

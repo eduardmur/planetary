@@ -1,8 +1,7 @@
-// NASA's 20 main-table rows as they appear in the schedule, and which drawing (if any) shows each one.
+// NASA's 20 main-table rows as they appear in the table, and which drawing (if any) shows each one.
 //
-// "shape" lists the views that draw the parameter: A = the body view, P = the key plan (and on the
-// general arrangement, the line-up and the plan). Rows without a shape are listed, with NASA's
-// definition, and nothing is drawn for them.
+// "shape" lists the views that draw the parameter: A = View A (the body), P = the key plan. Rows
+// without a shape are listed with NASA's definition, and nothing is drawn for them.
 
 export type View = 'A' | 'P';
 

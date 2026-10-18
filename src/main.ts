@@ -38,6 +38,22 @@ for (const el of document.querySelectorAll<SVGSVGElement>('svg.title-lettering')
 
 // ---- The "?" dialog --------------------------------------------------------------------------------
 
+// The heading takes focus as the dialog opens. Set from here, after parsing, it focuses nothing on
+// load; in the markup it would scroll a page without the script down to the inline notes.
+document.getElementById('info-title')?.setAttribute('autofocus', '');
+
+// The open dialog stops the page scrolling. Where the page had a scrollbar, its gutter stays, so
+// nothing behind the dialog moves; measured as "?" is pressed, before the dialog opens.
+const root = document.documentElement;
+document.addEventListener(
+  'click',
+  (e) => {
+    if (e.target instanceof Element && e.target.closest('button[command="show-modal"]'))
+      root.classList.toggle('has-scrollbar', innerWidth > root.clientWidth);
+  },
+  true,
+);
+
 // Invoker commands (command="show-modal" / "close") where the browser lacks them.
 if (!('commandForElement' in HTMLButtonElement.prototype)) {
   for (const b of document.querySelectorAll<HTMLButtonElement>('button[commandfor]')) {
@@ -49,20 +65,32 @@ if (!('commandForElement' in HTMLButtonElement.prototype)) {
     });
   }
 }
-// A click on the backdrop closes the dialog where closedby="any" is not supported.
-for (const d of document.querySelectorAll<HTMLDialogElement>('dialog')) {
-  d.addEventListener('click', (e) => {
-    const r = d.getBoundingClientRect();
-    const inside =
-      e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-    if (!inside) d.close();
-  });
+// Light dismiss where closedby="any" is not supported (older Safari): close only when the press and
+// the click both land on the backdrop, as native light dismiss does.
+if (!('closedBy' in HTMLDialogElement.prototype)) {
+  for (const d of document.querySelectorAll<HTMLDialogElement>('dialog[closedby="any"]')) {
+    const onBackdrop = (e: MouseEvent) => {
+      if (e.target !== d) return false; // the backdrop hit-tests as the dialog
+      const r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    let downOnBackdrop = false;
+    d.addEventListener('pointerdown', (e) => {
+      downOnBackdrop = onBackdrop(e);
+    });
+    d.addEventListener('click', (e) => {
+      if (downOnBackdrop && onBackdrop(e)) d.close();
+      downOnBackdrop = false;
+    });
+  }
 }
 
 // ---- Page script -----------------------------------------------------------------------------------
 
 if (data.sheet === 'home') initHome(data);
 else initSheet(data);
+// The page is set up: it keeps its layout for the script (see JS_CLASS in src/render/page.ts).
+root.classList.add('live');
 
 // ---- Pause ---------------------------------------------------------------------------------------
 

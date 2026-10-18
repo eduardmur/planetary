@@ -56,6 +56,11 @@ export class Camera {
     return this.tween !== null;
   }
 
+  /** Where the camera is, or where it is turning to. */
+  get target(): Orientation {
+    return this.tween ? { ...this.tween.to } : { yaw: this.yaw, pitch: this.pitch };
+  }
+
   /** Advance a running animation; returns true while the camera is still moving. */
   step(now: number): boolean {
     if (!this.tween) return false;

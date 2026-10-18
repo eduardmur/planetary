@@ -41,9 +41,27 @@
     stroke-width: 24px;
   }
 }
+/* Keyboard focus takes the page's dashed yellow ring, inside the frame. Chromium also rings an <svg>
+   focused by a click, a tap or a drag: only keyboard focus shows. */
 .drawing:focus-visible {
-  outline: 1px dashed var(--ink-3);
   outline-offset: -4px;
+}
+.drawing:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Forced colours (Windows contrast themes) leave SVG paint alone only in system colours: the
+   drawings and the lettering take the theme's. On svg, not :root, so the page's own text and rows
+   keep theirs. */
+@media (forced-colors: active) {
+  svg {
+    --paper: Canvas;
+    --ink: CanvasText;
+    --ink-2: CanvasText;
+    --ink-3: CanvasText;
+    --ink-4: GrayText;
+    --hot: Highlight;
+  }
 }
 
 .ln {

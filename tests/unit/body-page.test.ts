@@ -47,7 +47,8 @@ describe('body pages', () => {
         const button = row.querySelector('th button')!;
         expect(button.getAttribute('popovertarget')).toBe(`def-${p.key}`);
         const def = popover(id, p.key);
-        expect(def.getAttribute('popover')).toBe('manual');
+        // One at a time without the script (the script makes them manual).
+        expect(def.getAttribute('popover')).toBe('auto');
         expect(def.getAttribute('aria-labelledby')).toBe(`t-${p.key}`);
         expect(text(def.querySelector('.text'))).toBe(FACTS.definitions.main[p.key]!.text);
         const notes = def.querySelector('.src a')!.getAttribute('href');
@@ -118,6 +119,41 @@ describe('body pages', () => {
       expect(text(info)).toContain(`${sheet.dwg} · SHEET ${sheet.number} / 11 · DETAIL DRAWING`);
       expect(text(info)).toContain('General notes');
       expect(text(info)).toContain('not affiliated with or endorsed by NASA');
+    });
+
+    it(`${id}: the dialog's title line breaks only after a "·", and the dialog links home`, () => {
+      const info = root.querySelector('dialog#info')!;
+      const line = info.querySelector('.title-line')!;
+      const items = line.childNodes.filter((n) => n.nodeType === 1) as HTMLElement[];
+      expect(items.map((s) => s.getAttribute('class'))).toEqual(Array(6).fill('nowrap'));
+      expect(items.map(text)[0]).toBe(sheet.dwg);
+      expect(items.map(text).at(-1)).toBe('SPIN 1 s = 1 h');
+      expect(line.innerHTML.split('</span>&nbsp;· <span')).toHaveLength(6);
+      expect(info.querySelector('#epoch') !== null).toBe(!!keyPlanModel(id).j2000);
+      // Focus goes to the heading when the dialog opens (the script adds autofocus), not on load.
+      expect(info.querySelector('[autofocus]')).toBeNull();
+      const home = info.querySelector('.info-body p a')!;
+      expect(home.getAttribute('href')).toBe(ctx.base);
+      expect(text(home)).toBe('☉ Planetary');
+    });
+
+    it(`${id}: the dialog's reading notes follow the input and the script`, () => {
+      const list = root.querySelectorAll('dialog#info .info-body ul')[0]!;
+      const lines = list.querySelectorAll('li');
+      // Double-click or double tap; ← → only with keys; the stepper only with a mouse.
+      const reset = lines.find((l) => text(l).includes('to reset'))!;
+      expect(reset.querySelector('.pointer')!.text).toBe('double-click');
+      expect(reset.querySelector('.touch')!.text).toBe('double-tap');
+      const tabsLine = lines.find((l) => text(l).startsWith('Tabs'))!;
+      expect(tabsLine.querySelector('.pointer')!.text).toContain('← →');
+      expect(lines.find((l) => text(l).includes('‹ ›'))!.classList.contains('pointer')).toBe(true);
+      // What needs the script is .js-only; without it, a row still opens its definition.
+      for (const l of lines.filter((l) => /drawing|Drag|Tabs|‹ ›/.test(text(l))))
+        expect(l.classList.contains('js-only'), text(l)).toBe(true);
+      expect(text(lines.find((l) => l.classList.contains('nojs-only'))!)).toContain(
+        'row’s name for NASA’s definition',
+      );
+      expect(text(list)).toContain('☉');
     });
 
     it(`${id}: no notes, title block or definition box on the sheet itself`, () => {
@@ -201,6 +237,46 @@ describe('body pages', () => {
     expect(
       dom.get('venus')!.querySelector('tr[data-key="magneticField"]')!.hasAttribute('data-shape'),
     ).toBe(false);
+  });
+
+  it('Orbital Velocity says what lights up, since no line is sized by it', () => {
+    for (const [id] of dom) {
+      const def = popover(id, 'orbitalVelocity');
+      if (id === 'moon') {
+        expect(def.querySelector('.not-drawn')).not.toBeNull();
+        expect(text(def)).not.toContain('direction of motion');
+      } else
+        expect(text(def.querySelector('p.n'))).toBe(
+          'Drawn: today’s position and the direction of motion. The arrow is a symbol; its length is not the speed.',
+        );
+    }
+    expect(text(dom.get('saturn')!.querySelector('dialog#info'))).toContain(
+      'KEY PLAN: SUN, BODY AND MOTION ARROW ARE SYMBOLS, NOT TO SCALE.',
+    );
+  });
+
+  it('no × Earth where NASA’s ratio is "Unknown" (the giants’ surface pressure)', () => {
+    for (const id of ['jupiter', 'saturn', 'uranus', 'neptune'] as const) {
+      const def = popover(id, 'surfacePressure');
+      expect(def.querySelector('.ratio'), id).toBeNull();
+      expect(text(def.querySelector('.value'))).toBe('Unknown*');
+    }
+    // A real ratio stays: Venus's 92 bar is 92 × Earth.
+    expect(text(popover('venus', 'surfacePressure').querySelector('.ratio'))).toContain('× Earth');
+  });
+
+  it('the row stepper sits outside the table, which keeps its caption as its name', () => {
+    for (const [, root] of dom) {
+      const steps = root.querySelector('.schedule > .steps')!;
+      expect(steps.getAttribute('role')).toBe('group');
+      expect(
+        steps.querySelectorAll('button.step').map((b) => b.getAttribute('aria-label')),
+      ).toEqual(['Previous row', 'Next row']);
+      expect(root.querySelector('table.main caption')!.querySelector('button')).toBeNull();
+      expect(root.querySelector('.view-a .caption')!.getAttribute('data-edge-on')).toBe(
+        'Orbit plane edge-on',
+      );
+    }
   });
 
   it('15 popovers carry the 18 conflicts, in 16 paragraphs', () => {

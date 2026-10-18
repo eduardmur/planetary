@@ -2,11 +2,13 @@
    table. Everything else floats: a row's popover and the "?" dialog never move the page. */
 
 /* Set on the root, which scrolls: the sticky header, the sticky block above the table (phones in
-   portrait add View A to it), and a row height at which all 20 rows fit at 1280 × 720. */
+   portrait add View A to it), a row height at which all 20 rows fit at 1280 × 720, and the widest
+   the table and its docked sheet get on a tablet held upright. */
 html:has(.sheet-body) {
   --tabs-h: 44px;
   --sticky-h: var(--tabs-h);
   --row-h: clamp(24px, (100svh - 145px) / 20, 32px);
+  --sheet-w: 440px;
   scroll-padding-top: var(--sticky-h);
 }
 
@@ -19,18 +21,7 @@ html:has(.sheet-body) {
     'views schedule';
 }
 
-/* Cross-document crossfade between sheets; the header stays put. */
-@view-transition {
-  navigation: auto;
-}
-::view-transition-group(*) {
-  animation-duration: 180ms;
-}
-@media (prefers-reduced-motion: reduce) {
-  @view-transition {
-    navigation: none;
-  }
-}
+/* Pages crossfade into each other (opted into in each page's <head>); the header stays put. */
 
 .sheet-body .skip {
   position: absolute;
@@ -86,11 +77,13 @@ html:has(.sheet-body) {
   line-height: 1;
 }
 .sheet-body .tabs nav {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
 }
-/* The strip scrolls sideways under faded edges when the window is too narrow for it. */
+/* The strip scrolls sideways when the window is too narrow for it, faded on the side where it hides
+   tabs (src/ui/sheet.ts sets data-more on the nav). */
 .sheet-body .tabs .strip {
   display: flex;
   margin: 0;
@@ -99,6 +92,23 @@ html:has(.sheet-body) {
   overflow-x: auto;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
+}
+.sheet-body .tabs nav[data-more='left'] .strip {
+  mask-image: linear-gradient(to right, transparent, #000 30px);
+}
+.sheet-body .tabs nav[data-more='right'] .strip {
+  mask-image: linear-gradient(to left, transparent, #000 30px);
+}
+.sheet-body .tabs nav[data-more='both'] .strip {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 30px,
+    #000 calc(100% - 30px),
+    transparent
+  );
+}
+html:not(.js) .sheet-body .tabs .strip {
   mask-image: linear-gradient(
     to right,
     transparent,
@@ -106,6 +116,37 @@ html:has(.sheet-body) {
     #000 calc(100% - 12px),
     transparent
   );
+}
+/* ‹ › over a faded edge, for a mouse: a click scrolls the strip that way. */
+.sheet-body .tabs .more {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  display: none;
+  place-items: center;
+  width: 20px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.sheet-body .tabs .more[data-dir='-1'] {
+  left: 0;
+}
+.sheet-body .tabs .more[data-dir='1'] {
+  right: 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sheet-body .tabs nav:is([data-more='left'], [data-more='both']) .more[data-dir='-1'],
+  .sheet-body .tabs nav:is([data-more='right'], [data-more='both']) .more[data-dir='1'] {
+    display: grid;
+  }
+  .sheet-body .tabs .more:hover {
+    color: var(--ink);
+  }
 }
 .sheet-body .tabs .strip::-webkit-scrollbar {
   display: none;
@@ -267,15 +308,23 @@ html:has(.sheet-body) {
     border-color: var(--ink);
   }
 }
-@media (min-width: 861px) {
+@media (min-width: 861px) and (min-height: 501px) {
   .sheet-body .view figcaption .swap {
     display: none;
   }
   /* Room for the longer caption of the turned plan, so the plan does not shrink as it turns; one
-     line sits at the bottom, level with View A's caption. */
+     line sits at the bottom. The two captions share one baseline: View A's line is set by its
+     text, and Pause's padding and border hang below it. */
   .sheet-body .view.key-plan figcaption {
     min-height: calc(2 * 1.35em);
     align-items: flex-end;
+    margin-bottom: calc(10px + var(--w-narrow));
+  }
+  .sheet-body .view-a figcaption {
+    bottom: calc(10px + var(--w-narrow));
+  }
+  .sheet-body .view-a figcaption #pause {
+    margin-bottom: calc(-2px - var(--w-narrow));
   }
   /* Pause and Play take the same width. */
   .sheet-body #pause {
@@ -286,6 +335,7 @@ html:has(.sheet-body) {
 /* ---- NASA's table ----------------------------------------------------------------------------- */
 
 .sheet-body .schedule {
+  position: relative;
   grid-area: schedule;
   min-width: 0;
   padding: 10px 14px 8px;
@@ -386,6 +436,45 @@ html:has(.sheet-body) {
   font-size: 12px;
   color: var(--ink-3-text);
 }
+/* The row stepper, at the right end of the caption line on the desktop layout: there while a
+   popover is open, which covers the rows around its own; showing it moves nothing. */
+.sheet-body .steps {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  display: none;
+  visibility: hidden;
+}
+@media (min-width: 861px) and (min-height: 501px) {
+  html.js .sheet-body .steps {
+    display: flex;
+  }
+}
+.sheet-body .schedule:has(.def:popover-open) .steps {
+  visibility: visible;
+}
+.sheet-body .steps .step {
+  width: 24px;
+  height: 24px;
+  padding: 0 0 2px;
+  font: 400 17px/1 var(--font);
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.sheet-body .steps .step[aria-disabled='true'] {
+  color: var(--ink-4);
+  cursor: default;
+}
+@media (hover: hover) {
+  .sheet-body .steps .step:not([aria-disabled='true']):hover {
+    color: var(--ink);
+  }
+}
+.sheet-body .steps .step:focus-visible {
+  outline-offset: -2px;
+}
 .sheet-body .legend .mark {
   margin: 0 2px 0 0;
 }
@@ -406,21 +495,28 @@ html:has(.sheet-body) {
 
 /* ---- A row's popover: under its row, or above it where there is more room ------------------- */
 
+.sheet-body .schedule tr[data-key] {
+  anchor-scope: --row;
+}
 .sheet-body .schedule tr:has(> td > .def:popover-open) {
   anchor-name: --row;
 }
 .sheet-body .def {
-  /* Clearance under the header, for a popover over its row. */
+  /* Anchored to the open row (the script places it itself, see [data-side] below), clear of the
+     header when over its row and of the frame's foot when under it. */
   --clear: calc(var(--gap) + var(--w-frame) + var(--tabs-h));
+  --foot: calc(var(--gap) + var(--w-frame) + env(safe-area-inset-bottom));
   position-anchor: --row;
   inset: auto;
+  bottom: var(--foot);
+  align-self: start;
   margin: 4px 0;
   position-area: block-end;
   /* Without the script, the roomier side where the engine sorts the base position too. */
   position-try: most-height --above-row;
   justify-self: anchor-center;
   width: anchor-size(--table width);
-  max-height: calc(100% - 8px);
+  max-height: calc(100% - 8px - var(--foot));
   overflow: auto;
   overscroll-behavior: contain;
   padding: 0 12px 10px;
@@ -440,17 +536,17 @@ html:has(.sheet-body) {
   position-area: block-start;
   align-self: end;
   top: var(--clear);
+  bottom: auto;
   max-height: calc(100% - 8px - var(--clear));
 }
-/* The script picks the roomier side itself, alike in every engine. */
+/* With the script, the popover is placed from its row and the table (src/ui/sheet.ts), on the
+   roomier side, alike in every engine. */
 .sheet-body .def[data-side] {
+  position-area: none;
   position-try: none;
-}
-.sheet-body .def[data-side='above'] {
-  position-area: block-start;
-  align-self: end;
-  top: var(--clear);
-  max-height: calc(100% - 8px - var(--clear));
+  justify-self: auto;
+  align-self: auto;
+  margin: 0;
 }
 @starting-style {
   .sheet-body .def:popover-open {
@@ -587,41 +683,66 @@ html:has(.sheet-body) {
   color: var(--ink-2);
   border-left: 2px solid var(--ink-3);
 }
+/* NASA's link stays in sight at the foot of a popover that scrolls, over a fade that shows there is
+   more above it; it sits in the popover's bottom padding. */
 .sheet-body .def .src {
-  margin: 8px 0 0;
+  position: sticky;
+  bottom: -10px;
+  margin: -6px -12px -10px;
+  padding: 16px 12px 10px;
+  background: linear-gradient(transparent, var(--paper) 14px);
   font-size: 11.5px;
   color: var(--ink-3-text);
 }
 
 /* Docked at the bottom on phones in portrait, where an anchored popover would slide over the sticky
-   drawing, and where anchor positioning is missing. The table keeps room under its last rows for
-   good, so opening and closing never moves the page. */
+   drawing, and where anchor positioning is missing: flush with the foot of the screen, in a column
+   no wider than --sheet-w. The script gives the table room under its last rows while it needs it
+   (--tail), so that opening and closing never moves what is on screen. */
 @media (max-width: 860px) and (orientation: portrait) {
   .sheet-body .def,
   .sheet-body .def[data-side] {
     position-area: none;
+    /* Not over the row instead: most-height would pick that when it is taller. */
+    position-try: none;
     justify-self: auto;
     align-self: auto;
-    inset: auto 6px calc(6px + env(safe-area-inset-bottom)) 6px;
+    inset: auto max(6px, env(safe-area-inset-right), calc(50% - var(--sheet-w) / 2)) 0
+      max(6px, env(safe-area-inset-left), calc(50% - var(--sheet-w) / 2));
     width: auto;
     margin: 0;
-    max-height: calc(100svh - var(--sticky-h) - 48px);
+    max-height: calc(100svh - var(--sticky-h) - 42px);
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+  .sheet-body .def .src {
+    bottom: 0;
+    margin-bottom: 0;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
   }
   .sheet-body .schedule {
-    padding-bottom: calc(100svh - var(--sticky-h) - 48px);
+    padding-bottom: calc(8px + var(--tail, 0px));
   }
 }
 @supports not (anchor-name: --a) {
   .sheet-body .def,
   .sheet-body .def[data-side] {
     align-self: auto;
-    inset: auto 6px calc(6px + env(safe-area-inset-bottom)) 6px;
+    inset: auto max(6px, env(safe-area-inset-right), calc(50% - var(--sheet-w) / 2)) 0
+      max(6px, env(safe-area-inset-left), calc(50% - var(--sheet-w) / 2));
     width: auto;
     margin: 0;
-    max-height: calc(100svh - var(--sticky-h) - 48px);
+    max-height: calc(100svh - var(--sticky-h) - 42px);
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+  .sheet-body .def .src {
+    bottom: 0;
+    margin-bottom: 0;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
   }
   .sheet-body .schedule {
-    padding-bottom: calc(100svh - var(--sticky-h) - 48px);
+    padding-bottom: calc(8px + var(--tail, 0px));
   }
   /* On wide screens, within the table's column: never over a drawing. */
   @media (min-width: 861px) {
@@ -655,7 +776,8 @@ html:has(.sheet-body) {
 
 /* ---- Phones and narrow windows: one drawing at a time ---------------------------------------- */
 
-@media (max-width: 860px) {
+/* Big phones on their side are wider than 860 px, but short: they take this layout too. */
+@media (max-width: 860px), (max-height: 500px) {
   html:has(.sheet-body) {
     --tabs-h: 40px;
   }
@@ -703,6 +825,15 @@ html:has(.sheet-body) {
   .sheet-body .view-a figcaption #pause {
     margin-left: 6px;
   }
+  /* The legend comes first, so the first screen says that a row opens NASA's definition. */
+  .sheet-body .schedule {
+    display: flex;
+    flex-direction: column;
+  }
+  .sheet-body .legend {
+    order: -1;
+    margin: 0 0 6px;
+  }
   /* Pause as a 32 px icon: two bars, or a triangle while paused. Its text stays for screen readers. */
   .sheet-body #pause {
     display: inline-flex;
@@ -726,9 +857,20 @@ html:has(.sheet-body) {
     border-left: 9px solid currentColor;
     border-block: 5.5px solid transparent;
   }
+  /* Forced colours paint transparent borders too: the triangle is cut out of a block of colour. */
+  @media (forced-colors: active) {
+    .sheet-body #pause[data-paused='true']::before {
+      width: 9px;
+      height: 11px;
+      border: 0;
+      background: ButtonText;
+      clip-path: polygon(0 0, 100% 50%, 0 100%);
+    }
+  }
 }
 
-/* Portrait: the header and View A stick to the top and the table scrolls under them. */
+/* Portrait: the header and View A stick to the top and the table scrolls under them. On a tablet the
+   table keeps to the docked sheet's column. */
 @media (max-width: 860px) and (orientation: portrait) {
   html:has(.sheet-body) {
     --sticky-h: calc(var(--tabs-h) + 44svh);
@@ -746,16 +888,35 @@ html:has(.sheet-body) {
   }
   .sheet-body .schedule {
     border-left: 0;
+    padding-inline: max(14px, calc(50% - var(--sheet-w) / 2));
   }
 }
 
 /* Landscape: the drawings on the left at full height, the table on the right. */
-@media (max-width: 860px) and (orientation: landscape) {
+@media (max-width: 860px) and (orientation: landscape),
+  (max-height: 500px) and (orientation: landscape) {
   .sheet-body {
     grid-template-columns: minmax(0, 55fr) minmax(0, 45fr);
   }
   .sheet-body .views {
     height: calc(var(--vh) - 2 * var(--gap) - 2 * var(--w-frame) - var(--tabs-h));
+  }
+}
+/* Landscape too narrow for the table beside the drawings (a small phone, or a zoomed-in window):
+   the drawings above the table. */
+@media (max-width: 629px) and (orientation: landscape) {
+  .sheet-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas: 'tabs' 'views' 'schedule';
+  }
+  .sheet-body .views {
+    position: relative;
+    top: 0;
+    border-bottom: var(--w-narrow) solid var(--ink-3);
+  }
+  .sheet-body .schedule {
+    border-left: 0;
   }
 }
 
@@ -765,6 +926,18 @@ html:has(.sheet-body) {
     --row-h: 32px;
   }
 }
+/* Fingers on the desktop layout (tablets): Pause keeps its text, with a hit area round it as "?"
+   has; nothing moves. */
+@media (pointer: coarse) and (min-width: 861px) and (min-height: 501px) {
+  .sheet-body #pause {
+    position: relative;
+  }
+  .sheet-body #pause::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
+}
 
 /* ---- Without JavaScript: NASA's values and definitions, no drawings --------------------------- */
 
@@ -772,6 +945,10 @@ html:not(.js) .sheet-body .views {
   position: relative;
   top: 0;
   height: 120px;
+}
+/* Not in <noscript>: it also shows when scripts run but the page's script failed to load. */
+html.js .sheet-body .noscript {
+  display: none;
 }
 html:not(.js) .sheet-body .view {
   display: none;
@@ -787,9 +964,31 @@ html:not(.js) .sheet-body .tabs .home::before {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-@media (max-width: 860px) {
+@media (max-width: 860px), (max-height: 500px) {
   html:not(.js) .sheet-body .tabs .home::before {
     content: none;
+  }
+}
+
+/* ---- Forced colours (Windows contrast themes): the current tab, the selected row and the marks
+   need lines of their own, as colours and backgrounds go ---------------------------------------- */
+
+@media (forced-colors: active) {
+  .sheet-body .tabs .strip a[aria-current='page'] {
+    border-bottom: 2px solid;
+    padding-top: 2px;
+  }
+  .sheet-body .schedule tbody tr.hot {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .sheet-body .schedule tr[data-shape] th button::after,
+  .sheet-body .legend .mark {
+    box-sizing: border-box;
+    padding-block: 3px;
+    border-inline: 1px solid;
+    background: content-box CanvasText;
+    opacity: 1;
   }
 }
 
