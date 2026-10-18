@@ -109,15 +109,17 @@ describe('home page', () => {
   it('counts NASA’s conflicts as conflicts', () => {
     const n = DISCREPANCIES.length;
     expect(n).toBeGreaterThan(1);
-    expect(dialog).toContain(
-      `Where NASA’s pages disagree <span class="nowrap">(${n} conflicts) ↗</span></a>`,
-    );
+    expect(dialog).toContain(`<span class="nowrap">(${n} conflicts) ↗</span></a>`);
   });
 
-  it('breaks its data links only after a "·", as the body pages do', () => {
+  it('breaks its data links only after a "·", and the long one before its count', () => {
     const links = dialog.match(/<h3>Data and code<\/h3>\s*<p>([\s\S]*?)<\/p>/)![1]!;
     expect(links.split('</a>&nbsp;· <a ')).toHaveLength(4);
     expect(links).not.toMatch(/ ·/);
+    // sheet.css keeps a link whole, or only its .nowrap parts when it has some.
+    expect(links).toContain(
+      '<span class="nowrap">Where NASA’s pages disagree</span> <span class="nowrap">(',
+    );
   });
 
   it('ends with its title block, broken only after a "·"', () => {

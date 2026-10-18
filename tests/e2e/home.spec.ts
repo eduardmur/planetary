@@ -733,3 +733,44 @@ test('"?" opens the notes; Esc and a click outside close them', async ({ page, i
   await page.mouse.click(8, 8);
   await expect(dialog).toBeHidden();
 });
+
+test('the dialog’s data links break only after a "·", and the long one before its count', async ({
+  page,
+}) => {
+  await page.goto('');
+  await page.locator('button.info').click();
+  await expect(page.locator('dialog#info')).toBeVisible();
+  for (const width of [320, 360, 390, 414, 1440]) {
+    await page.setViewportSize({ width, height: 760 });
+    // How each line of the paragraph but the last ends.
+    const ends = await page.evaluate(() => {
+      const h = [...document.querySelectorAll('#info h3')].find(
+        (h) => h.textContent === 'Data and code',
+      )!;
+      const range = document.createRange();
+      const out: string[] = [];
+      let line = '';
+      let mid = -Infinity;
+      const walker = document.createTreeWalker(h.nextElementSibling!, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const text = n.textContent ?? '';
+        for (let i = 0; i < text.length; i++) {
+          range.setStart(n, i);
+          range.setEnd(n, i + 1);
+          const r = range.getBoundingClientRect();
+          if (r.height && !/\s/.test(text[i]!)) {
+            const m = (r.top + r.bottom) / 2;
+            if (m > mid + 6 && line) {
+              out.push(line.trim());
+              line = '';
+            }
+            mid = m;
+          }
+          line += text[i];
+        }
+      }
+      return out;
+    });
+    for (const end of ends) expect(end, `${width}`).toMatch(/(·|disagree)$/);
+  }
+});

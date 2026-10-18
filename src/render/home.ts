@@ -36,6 +36,9 @@ function notes(m: OrreryModel): string[] {
 function about(sheet: Sheet, ctx: PageCtx, m: OrreryModel): string {
   const link = (href: string, text: string) => `<a href="${href}">${text}</a>`;
   const n = DISCREPANCIES.length;
+  // sheet.css keeps each data link whole; this one is too long for a phone, so it may also break
+  // before its count, and nowhere else.
+  const conflicts = `<span class="nowrap">Where NASA’s pages disagree</span> <span class="nowrap">(${n} conflict${n === 1 ? '' : 's'}) ↗</span>`;
   return `<p>NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>
       <p class="js-only">Point at a planet for its name; click it to open its sheet. On a phone, tap it.</p>
       <h3>This drawing</h3>
@@ -50,7 +53,7 @@ function about(sheet: Sheet, ctx: PageCtx, m: OrreryModel): string {
         <li>Retrieved <span class="nowrap">${FACTS.retrieved.slice(0, 10)}</span></li>
       </ul>
       <h3>Data and code</h3>
-      <p>${link(`${ctx.base}data/factsheet.json`, 'factsheet.json')}&nbsp;· ${link(`${ctx.base}data/factsheet-main.csv`, 'factsheet-main.csv')}&nbsp;· ${link(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree <span class="nowrap">(${n} conflict${n === 1 ? '' : 's'}) ↗</span>`)}&nbsp;· ${link(ctx.repo, 'Source code ↗')}</p>
+      <p>${link(`${ctx.base}data/factsheet.json`, 'factsheet.json')}&nbsp;· ${link(`${ctx.base}data/factsheet-main.csv`, 'factsheet-main.csv')}&nbsp;· ${link(`${ctx.repo}/blob/main/data/discrepancies.md`, conflicts)}&nbsp;· ${link(ctx.repo, 'Source code ↗')}</p>
       <p class="label">${titleLine([sheet.dwg, `SHEET ${sheet.number} / ${SHEET_COUNT}`, esc(sheet.title.toUpperCase()), esc(sheet.docType), `ISSUED ${ctx.issued}`])}</p>`;
 }
 
