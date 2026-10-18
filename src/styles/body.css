@@ -757,14 +757,6 @@ html:not(.js) .sheet-body .tabs .strip {
 
 /* ---- The "?" dialog's sheet details ---------------------------------------------------------- */
 
-.sheet-body ~ .info-dialog .sources a,
-.sheet-body ~ .info-dialog p a {
-  white-space: nowrap;
-}
-/* A long link wraps; the part of it that must stay whole is marked. */
-.sheet-body ~ .info-dialog p a:has(.nowrap) {
-  white-space: normal;
-}
 /* The row stepper exists only on the desktop layout. */
 @media not ((min-width: 861px) and (min-height: 501px)) {
   .sheet-body ~ .info-dialog .steps-note {

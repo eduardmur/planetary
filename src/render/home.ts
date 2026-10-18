@@ -50,7 +50,7 @@ function about(sheet: Sheet, ctx: PageCtx, m: OrreryModel): string {
         <li>Retrieved <span class="nowrap">${FACTS.retrieved.slice(0, 10)}</span></li>
       </ul>
       <h3>Data and code</h3>
-      <p>${link(`${ctx.base}data/factsheet.json`, 'factsheet.json')} · ${link(`${ctx.base}data/factsheet-main.csv`, 'factsheet-main.csv')} · ${link(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree (${n} conflict${n === 1 ? '' : 's'}) ↗`)} · ${link(ctx.repo, 'Source code ↗')}</p>
+      <p>${link(`${ctx.base}data/factsheet.json`, 'factsheet.json')}&nbsp;· ${link(`${ctx.base}data/factsheet-main.csv`, 'factsheet-main.csv')}&nbsp;· ${link(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree <span class="nowrap">(${n} conflict${n === 1 ? '' : 's'}) ↗</span>`)}&nbsp;· ${link(ctx.repo, 'Source code ↗')}</p>
       <p class="label">${titleLine([sheet.dwg, `SHEET ${sheet.number} / ${SHEET_COUNT}`, esc(sheet.title.toUpperCase()), esc(sheet.docType), `ISSUED ${ctx.issued}`])}</p>`;
 }
 

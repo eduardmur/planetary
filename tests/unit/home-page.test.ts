@@ -109,7 +109,15 @@ describe('home page', () => {
   it('counts NASA’s conflicts as conflicts', () => {
     const n = DISCREPANCIES.length;
     expect(n).toBeGreaterThan(1);
-    expect(dialog).toContain(`Where NASA’s pages disagree (${n} conflicts) ↗</a>`);
+    expect(dialog).toContain(
+      `Where NASA’s pages disagree <span class="nowrap">(${n} conflicts) ↗</span></a>`,
+    );
+  });
+
+  it('breaks its data links only after a "·", as the body pages do', () => {
+    const links = dialog.match(/<h3>Data and code<\/h3>\s*<p>([\s\S]*?)<\/p>/)![1]!;
+    expect(links.split('</a>&nbsp;· <a ')).toHaveLength(4);
+    expect(links).not.toMatch(/ ·/);
   });
 
   it('ends with its title block, broken only after a "·"', () => {
