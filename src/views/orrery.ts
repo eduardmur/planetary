@@ -177,6 +177,8 @@ export class OrreryView extends View {
   /** Radius (px) of the outermost aphelion, and of the Moon's ring. */
   private R = 1;
   private rho = 0;
+  /** A pointer that hovers and is fine (a mouse, a trackpad): it finds the bodies by their links. */
+  private readonly mouse = matchMedia('(hover: hover) and (pointer: fine)');
   private resized = true;
   /** The clock, as a Julian date, and its speed: 1 runs, 0 stands. */
   private jd: number;
@@ -233,6 +235,9 @@ export class OrreryView extends View {
     // The first frame at once, so the page never shows an empty drawing or links out of place.
     this.layout();
     this.place();
+    // A tablet that takes up a trackpad, or a laptop folded into a tablet, changes its pointer and not
+    // its size: the ring follows.
+    this.mouse.addEventListener('change', () => this.measure());
   }
 
   protected extent() {
@@ -281,7 +286,7 @@ export class OrreryView extends View {
     // take in more of the Earth's neighbours.
     const earth = this.planet('earth')?.r ?? 0;
     this.rho = 2 * earth + 6;
-    if (matchMedia('(hover: hover) and (pointer: fine)').matches)
+    if (this.mouse.matches)
       this.rho = Math.max(this.rho, (Math.floor(Math.max(earth + 6, 12)) + 3) / Math.sin(pitch));
     // The Moon's link is the ring's ellipse, MOON_LINK px wider all round, under the Earth's.
     const moon = this.links.get('moon');

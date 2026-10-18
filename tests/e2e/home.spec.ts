@@ -495,6 +495,35 @@ test('with a mouse, the Moon’s ring lies outside the Earth’s link', async ({
   }
 });
 
+test('a pointer that changes without a resize changes the Moon’s ring', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(
+    isMobile || browserName !== 'chromium',
+    'touch is turned on through the DevTools protocol',
+  );
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('?capture&date=2026-10-18');
+  const width = () =>
+    page
+      .locator('#orrery [data-ref="moon"]')
+      .evaluate((p: SVGGraphicsElement) => p.getBBox().width);
+  const mouse = await width();
+  const earth = await page.evaluate(
+    () => (window as unknown as Hooks).__pb.views.orrery.glyphRadii().earth!,
+  );
+  // A finger's ring: its radius is the Earth's symbol's diameter and 6 px.
+  const finger = 2 * (2 * earth + 6);
+  expect(mouse).toBeGreaterThan(finger + 1);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  await expect.poll(width).toBeCloseTo(finger, 0);
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+  await expect.poll(width).toBeCloseTo(mouse, 0);
+});
+
 test('a finger held on a body sees its name clear of the fingertip', async ({
   page,
   isMobile,
