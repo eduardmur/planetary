@@ -1,11 +1,27 @@
-// A body's page: View A and the key plan, NASA's 20 rows, and NASA's definitions.
+// A body's page: the tabs, View A and the key plan, NASA's 20 rows with a popover each (NASA's
+// definition, the ratio to Earth, the values drawn from the body's own page, where NASA's pages
+// disagree), and the "?" dialog with the notes, the sources and the title block.
 
-import { FACTS, body, mainRow, mainVal, ratioVal, row, type BodyId } from '../data/index.ts';
+import {
+  DISCREPANCIES,
+  FACTS,
+  body,
+  mainRow,
+  mainVal,
+  ratioVal,
+  row,
+  type BodyId,
+  type Discrepancy,
+  type Section,
+} from '../data/index.ts';
 import { bodyModel, keyPlanModel } from '../data/model.ts';
 import { PARAMS } from '../content/params.ts';
-import { BODY_SHEETS, SHEET_COUNT, bodyName, type Sheet } from '../content/sheets.ts';
+import { BODY_SHEETS, SHEET_COUNT, type Sheet } from '../content/sheets.ts';
+import { CAP, measure } from '../draw/lettering.ts';
+import { VISIBLE_FLATTENING, type RingEdge } from '../views/body.ts';
 import {
   NOTES_MAIN,
+  NOTES_RATIO,
   NOTES_SHEET,
   esc,
   infoButton,
@@ -15,23 +31,10 @@ import {
   named,
   val,
   type PageCtx,
-  type PageData,
   type Rendered,
 } from './common.ts';
 
-function definitions(): NonNullable<PageData['defs']> {
-  const defs: NonNullable<PageData['defs']> = {};
-  for (const p of PARAMS) {
-    const d = FACTS.definitions.main[p.key];
-    if (d) defs[p.key] = { term: d.term, text: d.text, src: NOTES_MAIN };
-  }
-  for (const key of ['polarRadius', 'coreRadius', 'dipoleTilt']) {
-    const d = FACTS.definitions.sheet[key];
-    if (d) defs[key] = { term: d.term, text: d.text, src: NOTES_SHEET };
-  }
-  return defs;
-}
-
+/** The rows drawn on this body's sheet (⊢⊣), with the views that draw them. */
 function drawn(id: BodyId): Map<string, string> {
   const shapes = new Map(
     PARAMS.filter((p) => p.shape.length).map((p) => [p.key, p.shape.join('')]),
@@ -47,202 +50,289 @@ function drawn(id: BodyId): Map<string, string> {
   return shapes;
 }
 
+/** The sentence a definition gives for starred values ("* For the Moon, …"). */
 function starNote(text: string | undefined): string | undefined {
   const i = text?.indexOf('*') ?? -1;
   return i >= 0 ? text!.slice(i + 1).trim() : undefined;
 }
 
-function generalNotes(id: BodyId): string {
-  const ids: BodyId[] = [id];
-  const plan = keyPlanModel(id);
+// ---- Header ------------------------------------------------------------------------------------
+
+/** PLANETARY (the home link), the ten bodies as tabs, and "?". */
+function tabs(id: BodyId, ctx: PageCtx): string {
+  const links = BODY_SHEETS.map(
+    (s) =>
+      `<li><a href="${ctx.base}${s.slug}/" data-body="${s.id}"${s.id === id ? ' aria-current="page"' : ''}>${esc(s.title)}</a></li>`,
+  ).join('');
+  // Sized exactly as src/main.ts letters it, so nothing moves when the lettering arrives.
+  const w = measure('PLANETARY') * CAP.l + 4;
+  const h = Math.ceil(CAP.l * 1.5);
+  return `<header class="tabs">
+      <a class="home" href="${ctx.base}"><svg class="title-lettering" data-text="PLANETARY" data-size="l" width="${w}" height="${h}" aria-hidden="true"></svg><span class="sun" aria-hidden="true">☉</span><span class="visually-hidden">Planetary</span></a>
+      <nav aria-label="Bodies"><ol class="strip">${links}</ol></nav>
+      ${infoButton('Notes and sources')}
+    </header>`;
+}
+
+// ---- Row popovers --------------------------------------------------------------------------------
+
+/** A value from the body's own fact sheet, with its definition from NASA's fact_notes.html. */
+function item(name: string, value: string, key: string, ...notes: string[]): string {
+  const d = FACTS.definitions.sheet[key];
+  return `<div><dt>${label(name)}</dt><dd class="v">${value}</dd>${d ? `<dd class="d">${esc(d.text)}</dd>` : ''}${notes.map((n) => `<dd class="n">${n}</dd>`).join('')}</div>`;
+}
+
+const LINE: Record<RingEdge['line'], string> = { wide: 'wide', thin: 'narrow', phantom: 'phantom' };
+const ringName = (n: string) => (/^\d/.test(n) ? `Ring ${n}` : n);
+
+/** Values of the body's page that set where a main-table row is drawn, and how. */
+const SETS: Record<string, { section: Section; key: string; note: string }> = {
+  perihelion: {
+    section: 'elements',
+    key: 'perihelionLongitude',
+    note: 'ϖ, a J2000 mean element: it sets the direction of the apsides line.',
+  },
+  orbitalInclination: {
+    section: 'elements',
+    key: 'ascendingNode',
+    note: 'Ω, a J2000 mean element: it sets the direction of the line of nodes.',
+  },
+  orbitalPeriod: {
+    section: 'orbital',
+    key: 'siderealPeriod',
+    note: 'The ticks on the orbit are 1/24 of this period apart.',
+  },
+};
+
+/** What a row's popover adds from the body's own fact sheet: the values its drawing also uses. */
+function alsoDrawn(id: BodyId, key: string): string {
+  const page = body(id);
   const b = bodyModel(id);
+  const section = (from: string, html: string) =>
+    `<section class="also"><h3>Also drawn, from NASA’s ${from}</h3>${html}</section>`;
+  const fromPage = (items: string[], after = '') =>
+    items.length
+      ? section(
+          `${esc(page.name)} fact sheet <time>${isoDate(page.lastUpdated)}</time>`,
+          `<dl>${items.join('')}</dl>${after}`,
+        )
+      : '';
+  const sets = SETS[key];
+  if (sets) {
+    const r = row(id, sets.section, sets.key);
+    return fromPage(r ? [item(r.label, val(r.body), sets.key, sets.note)] : []);
+  }
+  switch (key) {
+    case 'diameter': {
+      const items: string[] = [];
+      if (1 - b.polar / (b.diameter / 2) >= VISIBLE_FLATTENING) {
+        const r = row(id, 'bulk', 'polarRadius')!;
+        items.push(item(r.label, val(r.body), 'polarRadius'));
+      }
+      const core = row(id, 'bulk', 'coreRadius');
+      if (core) {
+        const mark = core.body.note;
+        const notes = mark ? page.footnotes.filter((f) => f.startsWith(`${mark} `)) : [];
+        items.push(item(core.label, val(core.body), 'coreRadius', ...notes.map(esc)));
+      }
+      return fromPage(items);
+    }
+    case 'ringSystem': {
+      const rings = page.rings;
+      if (!b.rings || !rings) return '';
+      const edges = b.rings.edges
+        .map(
+          (e) =>
+            `<div><dt>${esc(ringName(e.name))}</dt><dd>${esc(e.text)}</dd><dd>${LINE[e.line]}</dd></div>`,
+        )
+        .join('');
+      const notDrawn = b.rings.notDrawn.length
+        ? `<p>Not drawn at this scale: ${b.rings.notDrawn.map(esc).join(' · ')}.</p>`
+        : '';
+      return section(
+        `${esc(page.name)} rings fact sheet <time>${isoDate(rings.lastUpdated)}</time>`,
+        `<p class="k">Ring edges drawn <span class="unit">(km)</span></p><dl class="edges">${edges}</dl>${notDrawn}<p>Wide = opaque rings, narrow = fainter, phantom = optical depth under about 0.01.</p>${rings.notes.map((n) => `<p class="n">${esc(n)}</p>`).join('')}`,
+      );
+    }
+    case 'magneticField': {
+      if (!b.dipole) return '';
+      const mag = page.magnetosphere ?? [];
+      const tilt = mag.find((r) => r.key === 'dipoleTilt');
+      const offset = mag.find((r) => r.key === 'dipoleOffset');
+      const geo = mag.find((r) => r.key === 'geocentricDipole');
+      const items: string[] = [];
+      if (tilt) items.push(item(tilt.label, val(tilt.body), 'dipoleTilt'));
+      else if (geo)
+        // Earth's page gives no tilt: the drawing works it out from the dipole's latitude.
+        items.push(
+          item(
+            FACTS.definitions.sheet.dipoleTilt?.term ?? 'Dipole tilt',
+            esc(b.dipole.label),
+            'dipoleTilt',
+            `From ${esc(geo.label)} ${esc(geo.body.text)}${geo.group ? ` (${esc(geo.group)})` : ''}.`,
+          ),
+        );
+      if (offset)
+        items.push(
+          item(
+            offset.label,
+            `${val(offset.body)} <span class="q">· direction not given</span>`,
+            'dipoleOffset',
+          ),
+        );
+      const notes = (page.magnetosphereNotes ?? []).map((n) => `<p class="n">${esc(n)}</p>`);
+      return fromPage(items, notes.join(''));
+    }
+  }
+  return '';
+}
+
+/** One line of the ledger, in its own words. */
+const conflict = (d: Discrepancy) =>
+  `<p class="conflict">NASA’s pages disagree: ${esc(d.what)}: ${esc(d.a)} (${esc(d.aSrc)}) vs ${esc(d.b)} (${esc(d.bSrc)}).${d.note ? ` ${esc(d.note)}` : ''}</p>`;
+
+/**
+ * A row's popover: the label and NASA's value, its ratio to Earth, NASA's definition verbatim, what
+ * else the drawing takes from the body's page, where NASA's pages disagree, and the notes link.
+ */
+function popover(id: BodyId, key: string, isDrawn: boolean): string {
+  const r = mainRow(key);
+  const def = FACTS.definitions.main[key];
+  const ratio = id === 'earth' ? undefined : ratioVal(id, key);
+  // NASA's starred ratio sentence, unless the definition above already says it.
+  const ratioNote = ratio?.note === '*' ? starNote(FACTS.definitions.ratio?.[key]?.text) : '';
+  return `<div popover="manual" id="def-${key}" class="def" role="group" aria-labelledby="t-${key}">${[
+    `<header><h2 id="t-${key}">${label(r.label)}</h2><button type="button" class="close" popovertarget="def-${key}" popovertargetaction="hide" aria-label="Close">×</button></header>`,
+    `<p class="value"><b>${val(mainVal(id, key))}</b>${ratio?.text ? ` <span class="ratio">× Earth ${val(ratio)}</span>` : ''}</p>`,
+    def ? `<p class="text">${esc(def.text)}</p>` : '',
+    ratioNote && !def?.text.includes(ratioNote)
+      ? `<p class="ratio-note">× Earth*: ${esc(ratioNote)}</p>`
+      : '',
+    isDrawn ? '' : '<p class="not-drawn">Not drawn.</p>',
+    alsoDrawn(id, key),
+    ...DISCREPANCIES.filter((d) => d.body === id && d.key === key).map(conflict),
+    `<p class="src"><a href="${NOTES_MAIN}#${r.anchor}">NASA notes ↗</a></p>`,
+  ].join('')}</div>`;
+}
+
+/** One of NASA's rows: the label as a disclosure button for its popover, and the value as printed. */
+function scheduleRow(id: BodyId, key: string, shape: string | undefined): string {
+  const r = mainRow(key);
+  const mark = shape ? '<span class="visually-hidden">, drawn</span>' : '';
+  return `<tr data-key="${key}"${shape ? ` data-shape="${shape}"` : ''}><th scope="row"><button type="button" id="b-${key}" popovertarget="def-${key}">${label(r.label)}${mark}</button></th><td>${val(mainVal(id, key))}${popover(id, key, !!shape)}</td></tr>`;
+}
+
+// ---- The "?" dialog ------------------------------------------------------------------------------
+
+function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
+  const b = body(id);
+  const name = b.name;
+  const plan = keyPlanModel(id);
+  const earth = body('earth');
+  const out = (href: string, text: string) => `<a href="${href}">${text} ↗</a>`;
   const notes = [
-    'VALUES AS PUBLISHED IN THE NASA NSSDCA PLANETARY FACT SHEETS (SOURCES BELOW). UNOFFICIAL — NOT A NASA PRODUCT.',
     'DIMENSIONS IN km; ORBITS IN 10⁶ km; ANGLES IN DEGREES.',
     'EACH LINE IS SIZED BY THE VALUE PRINTED ON IT. ( ) = REFERENCE DIMENSION; A WORKED-OUT VALUE SHOWS ITS FORMULA.',
     'AXIS DRAWN TO THE POSITIVE POLE (+, RIGHT-HAND RULE). SPIN SHOWN AT 1 s = 1 h. ROTATION PHASE ARBITRARY.',
-    !plan.j2000
-      ? 'ORBIT ABOUT THE EARTH FROM NASA’S MAIN-TABLE PERIGEE AND APOGEE. NASA GIVES NO NODE OR PERIGEE LONGITUDE FOR THE MOON: ORIENTATION ARBITRARY, NO POSITION SHOWN.'
-      : 'ORBIT ORIENTATION AND POSITIONS FROM NASA’S J2000 MEAN ELEMENTS (TWO-BODY): WITHIN 0.5° OF JPL HORIZONS 1990–2060, 0.3° FOR ALL BUT MERCURY.',
+    plan.j2000
+      ? 'ORBIT ORIENTATION AND POSITIONS FROM NASA’S J2000 MEAN ELEMENTS (TWO-BODY): WITHIN 0.5° OF JPL HORIZONS 1990–2060, 0.3° FOR ALL BUT MERCURY.'
+      : 'ORBIT ABOUT THE EARTH FROM NASA’S MAIN-TABLE PERIGEE AND APOGEE. NASA GIVES NO NODE OR PERIGEE LONGITUDE FOR THE MOON: ORIENTATION ARBITRARY, NO POSITION SHOWN.',
+    plan.j2000
+      ? 'KEY PLAN: SUN AND BODY ARE SYMBOLS, NOT TO SCALE.'
+      : 'KEY PLAN: THE EARTH IS A SYMBOL, NOT TO SCALE.',
     'NASA: “THE VALUES LISTED ON THE FACTSHEETS ARE NOT ‘OFFICIAL’ VALUES … CARE SHOULD BE EXERCISED WHEN USING THESE VALUES.”',
   ];
-  if (b.rings) {
-    notes.push(
-      'RING EDGES FROM THE RINGS FACT SHEET (km): WIDE = OPAQUE RINGS, NARROW = FAINTER, PHANTOM = OPTICAL DEPTH UNDER ABOUT 0.01.' +
-        (b.rings.notDrawn.length
-          ? ` NOT DRAWN AT THIS SCALE: ${b.rings.notDrawn.map((n) => n.toUpperCase()).join(' · ')}.`
-          : ''),
-    );
-  }
-  // Starred values on this sheet, with NASA's own sentence for each (main table, then ratio table).
-  const starred: string[] = [];
-  const seen = new Set<string>();
-  for (const p of PARAMS) {
-    const rowName = mainRow(p.key)
-      .label.replace(/\s*\(.*$/, '')
-      .toUpperCase();
-    const inMain = ids.some((id) => mainVal(id, p.key).note === '*');
-    const inRatio = id !== 'earth' && ratioVal(id, p.key)?.note === '*';
-    const sources = [
-      { hit: inMain, text: FACTS.definitions.main[p.key]?.text, tag: '' },
-      { hit: inRatio, text: FACTS.definitions.ratio?.[p.key]?.text, tag: ' (× EARTH)' },
-    ];
-    for (const { hit, text, tag } of sources) {
-      const sentence = hit ? starNote(text) : undefined;
-      if (!sentence || seen.has(sentence)) continue;
-      seen.add(sentence);
-      starred.push(`* ${rowName}${tag}: ${sentence}`);
-    }
-  }
-  // Body-page notes, only where the sheet letters their marker or draws what they qualify.
-  const extra: string[] = [];
-  const core = b.core?.note;
-  for (const f of body(id).footnotes) if (core && f.startsWith(`${core} `)) extra.push(f);
-  if (b.dipole) extra.push(...(body(id).magnetosphereNotes ?? []));
-  const li = (n: string) => `<li>${esc(n)}</li>`;
-  return `<ol>${[...notes, ...starred, ...extra].map(li).join('')}</ol>`;
+  const sources = [
+    `${out(b.url, `NSSDCA ${esc(name)} fact sheet`)} ${isoDate(b.lastUpdated)}`,
+    `${out(FACTS.main.url, 'Planetary Fact Sheet')} ${isoDate(FACTS.main.lastUpdated)}`,
+    `${out(FACTS.ratio.url, 'Ratio table')} ${isoDate(FACTS.ratio.lastUpdated)}`,
+    ...(b.rings
+      ? [`${out(b.rings.url, `${esc(name)} rings fact sheet`)} ${isoDate(b.rings.lastUpdated)}`]
+      : []),
+    ...(plan.earth
+      ? [`${out(earth.url, 'Earth fact sheet')} ${isoDate(earth.lastUpdated)} (Earth’s orbit)`]
+      : []),
+    [
+      out(NOTES_MAIN, 'planetfact_notes.html'),
+      out(NOTES_RATIO, 'planetfact_ratio_notes.html'),
+      out(NOTES_SHEET, 'fact_notes.html'),
+    ].join(' · '),
+    `Retrieved <span class="nowrap">${FACTS.retrieved.slice(0, 10)}</span>`,
+  ];
+  const conflicts = DISCREPANCIES.filter((d) => d.body === id).length;
+  const positions = plan.j2000
+    ? `POSITIONS <time id="epoch" class="nowrap" datetime="${ctx.issued}">${ctx.issued}</time>`
+    : 'POSITION NOT GIVEN';
+  const li = (s: string) => `<li>${s}</li>`;
+  return `<p>NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>
+      <h3>Reading this sheet</h3>
+      <ul>
+        <li><span class="pointer">Click</span><span class="touch">Tap</span> a row, or a line in the drawing, for NASA’s definition; what it measures turns yellow.</li>
+        <li>Rows marked ⊢⊣ are drawn. Drag view A to turn it; double-click to reset. Spin: 1 s = 1 h.</li>
+        <li>Tabs and ← → switch bodies and keep the selected row.</li>
+      </ul>
+      <h3>General notes</h3>
+      <ol class="drafting">${notes.map((n) => li(esc(n))).join('')}</ol>
+      <h3>Sources</h3>
+      <ul class="sources">${sources.map(li).join('')}</ul>
+      <h3>Data and code</h3>
+      <p><a href="${ctx.base}data/factsheet.json">JSON</a> · <a href="${ctx.base}data/factsheet-main.csv">CSV</a> · ${out(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree (${conflicts} for ${esc(named(id))})`)} · ${out(ctx.repo, 'Source code')}</p>
+      <p class="title-line">${sheet.dwg} · SHEET ${sheet.number} / ${SHEET_COUNT} · ${esc(sheet.docType)} · ISSUED <span class="nowrap">${ctx.issued}</span> · ${positions} · SPIN <span class="nowrap">1 s = 1 h</span></p>
+      <p class="status">Planetary · Unofficial — not a NASA product · not affiliated with or endorsed by NASA</p>`;
 }
 
-function titleBlock(sheet: Sheet & { id: BodyId }, ctx: PageCtx): string {
-  const i = BODY_SHEETS.findIndex((s) => s.id === sheet.id);
-  const prev = BODY_SHEETS[(i + BODY_SHEETS.length - 1) % BODY_SHEETS.length]!;
-  const next = BODY_SHEETS[(i + 1) % BODY_SHEETS.length]!;
-  const href = (s: Sheet) => `${ctx.base}${s.slug}${s.slug ? '/' : ''}`;
-  const short = (s: Sheet) => s.title.toUpperCase();
-  const link = (url: string, text: string) => `<a href="${url}">${text}</a>`;
-  let sources: string;
-  {
-    const b = body(sheet.id);
-    const plan = keyPlanModel(sheet.id);
-    sources = [
-      `${link(b.url, `NSSDCA ${esc(bodyName(sheet.id).toUpperCase())} FACT SHEET`)} ${isoDate(b.lastUpdated)}`,
-      `${link(FACTS.main.url, 'PLANETARY FACT SHEET')} ${isoDate(FACTS.main.lastUpdated)}`,
-      `${link(FACTS.ratio.url, 'RATIO TABLE')} ${isoDate(FACTS.ratio.lastUpdated)}`,
-      ...(b.rings
-        ? [`${link(b.rings.url, 'RINGS FACT SHEET')} ${isoDate(b.rings.lastUpdated)}`]
-        : []),
-      ...(plan.earth
-        ? [`${link(body('earth').url, 'EARTH FACT SHEET')} ${isoDate(body('earth').lastUpdated)}`]
-        : []),
-      `${link(NOTES_MAIN, 'NOTES')}, ${link(NOTES_SHEET, 'FACT SHEET NOTES')}`,
-    ].join(' · ');
-  }
-  const noPosition = !keyPlanModel(sheet.id).j2000;
-  return `<footer class="title-block" aria-label="Title block">
-      <div class="name"><span class="k">Title</span><svg class="title-lettering" data-text="${esc(sheet.title.toUpperCase())}" aria-hidden="true"></svg><span class="visually-hidden">${esc(sheet.title)}</span></div>
-      <div><span class="k">Dwg no.</span><span class="v">${sheet.dwg}</span></div>
-      <div><span class="k">Sheet</span><span class="v">${sheet.number} / ${SHEET_COUNT}</span></div>
-      <div><span class="k">Type</span><span class="v">${sheet.docType}</span></div>
-      <div><span class="k">Issued</span><span class="v nowrap">${ctx.issued}</span></div>
-      <div class="wide"><span class="k">Source</span><span class="v">${sources} · RETRIEVED <span class="nowrap">${FACTS.retrieved.slice(0, 10)}</span></span></div>
-      <div class="wide"><span class="k">Epoch · spin</span><span class="v nav">
-        ${noPosition ? '<span>POSITION NOT GIVEN</span>' : `<span>POSITIONS <time id="epoch" class="nowrap" datetime="${ctx.issued}">${ctx.issued}</time></span>`}
-        <span class="si">1 s = 1 h</span>
-        <button type="button" id="pause">Pause</button>
-        <a href="${href(prev)}" rel="prev">‹ ${esc(short(prev))}</a>
-        <a href="${href(next)}" rel="next">${esc(short(next))} ›</a>
-      </span></div>
-      <div class="wide status"><span class="v">PLANETARY · UNOFFICIAL — NOT A NASA PRODUCT · <a href="${ctx.repo}">SOURCE CODE AND DATA</a></span></div>
-    </footer>`;
-}
-
-function notesBlock(id: BodyId): string {
-  return `<aside class="notes" aria-label="General notes">
-      <h2 class="label">General notes</h2>${generalNotes(id)}
-    </aside>`;
-}
-
-const definitionBox = `<div class="definition" id="definition" role="region" aria-live="polite" aria-label="NASA definition">
-        <p class="term"></p><p class="text"></p><p class="src"></p>
-        <p class="idle"><span class="pointer">Point at a row, or tab to it, for NASA’s definition.</span><span class="touch">Tap a row for NASA’s definition.</span></p>
-      </div>`;
-
-function drawnFromBodyPage(id: BodyId): string {
-  const b = bodyModel(id);
-  const rows: string[] = [];
-  const tr = (key: string, name: string, value: string) =>
-    `<tr data-key="${key}" data-shape="A" tabindex="0"><th scope="row">${label(name)}<span class="visually-hidden">, drawn</span></th><td>${value}</td></tr>`;
-  if (1 - b.polar / (b.diameter / 2) >= 0.01) {
-    const r = row(id, 'bulk', 'polarRadius')!;
-    rows.push(tr('polarRadius', r.label, val(r.body)));
-  }
-  const core = row(id, 'bulk', 'coreRadius');
-  if (core) rows.push(tr('coreRadius', core.label, val(core.body)));
-  if (b.dipole) {
-    const tilt = body(id).magnetosphere?.find((r) => r.key === 'dipoleTilt');
-    const offset = body(id).magnetosphere?.find((r) => r.key === 'dipoleOffset');
-    if (tilt) rows.push(tr('dipoleTilt', tilt.label, val(tilt.body)));
-    else rows.push(tr('dipoleTilt', 'Dipole tilt (derived)', esc(b.dipole.label)));
-    if (offset) rows.push(tr('dipoleTilt', offset.label, val(offset.body)));
-  }
-  if (b.rings) {
-    const name = (n: string) => (/^\d/.test(n) ? `Ring ${n}` : n);
-    const list = b.rings.edges.map((e) => `${esc(name(e.name))} ${esc(e.text)}`).join('<br />');
-    rows.push(tr('ringSystem', 'Ring edges drawn (km)', list));
-  }
-  if (!rows.length) return '';
-  return `<table class="drawn">
-        <caption class="label">Drawn from the NASA ${esc(body(id).name)} fact sheet</caption>
-        <tbody>${rows.join('')}</tbody>
-      </table>`;
-}
+// ---- The page ------------------------------------------------------------------------------------
 
 export function bodySheet(id: BodyId, sheet: Sheet, ctx: PageCtx): Rendered {
   const name = body(id).name;
   const b = bodyModel(id);
   const plan = keyPlanModel(id);
   const shapes = drawn(id);
-  const rows = PARAMS.map((p) => {
-    const r = mainRow(p.key);
-    const v = mainVal(id, p.key);
-    const ratio = id === 'earth' ? undefined : ratioVal(id, p.key);
-    const shape = shapes.get(p.key);
-    const mark = shape ? '<span class="visually-hidden">, drawn</span>' : '';
-    return `<tr data-key="${p.key}"${shape ? ` data-shape="${shape}"` : ''} tabindex="0"><th scope="row">${label(r.label)}${mark}</th><td>${val(v)}</td>${id === 'earth' ? '' : `<td class="ratio">${val(ratio)}</td>`}</tr>`;
-  }).join('\n          ');
+  const rows = PARAMS.map((p) => scheduleRow(id, p.key, shapes.get(p.key))).join('\n          ');
   const moon = id === 'moon';
-  const apsides = moon ? ['perigee', 'apogee'] : ['perihelion', 'aphelion'];
+  const obliquity = esc(mainVal(id, 'obliquity').text);
   const description = `${named(id, true)} from NASA’s Planetary Fact Sheet as an engineering drawing: diameter ${mainVal(id, 'diameter').text} km, axis tilted ${mainVal(id, 'obliquity').text}°, rotation ${mainVal(id, 'rotationPeriod').text} h. Unofficial; not affiliated with NASA.`;
-  const planLabel = `Key plan: the orbit of ${named(id)} seen normal to its plane, ${apsides[0]} ${mainVal(id, 'perihelion').text} and ${apsides[1]} ${mainVal(id, 'aphelion').text} ×10⁶ km.`;
+  const planLabel = moon
+    ? 'Key plan: the orbit of the Moon about the Earth, seen normal to its plane. Orientation arbitrary; no position shown.'
+    : `Key plan: the orbit of ${named(id)} seen normal to its plane, with the Sun at the focus and today’s position.`;
   const edgeLabel = `Key plan, edge-on: the orbit of ${named(id)} along its line of nodes, inclined ${mainVal(id, 'orbitalInclination').text}° to the ecliptic.`;
-  const planCaption = moon ? 'Key plan · about the Earth' : 'Key plan · normal to orbit plane';
+  const planCaption = moon
+    ? 'Key plan · about the Earth · orientation arbitrary'
+    : 'Key plan · normal to orbit plane';
   const edgeCaption = moon
     ? 'Key plan · edge-on to the ecliptic'
     : 'Key plan · edge-on, along the line of nodes';
   const html = `<main class="sheet sheet-body" aria-labelledby="sheet-title">
     <span class="marks" aria-hidden="true"></span>
-    <h1 id="sheet-title" class="visually-hidden">${esc(name)} — sheet ${sheet.number} of ${SHEET_COUNT}</h1>
+    <a class="skip" href="#schedule">Skip to table</a>
+    ${tabs(id, ctx)}
+    <h1 id="sheet-title" class="visually-hidden">${esc(name)}</h1>
     <section class="views" aria-label="Drawings">
-      <noscript><p class="noscript">The drawings need JavaScript. The schedule and notes are complete without it.</p></noscript>
+      <noscript><p class="noscript">The drawings need JavaScript. NASA’s values and definitions work without it.</p></noscript>
       <figure class="view view-a">
-        <svg class="drawing" id="view-a" tabindex="0" role="img" aria-describedby="drawn-values" aria-label="View A: ${esc(named(id))} drawn to scale, axis tilted ${esc(mainVal(id, 'obliquity').text)} degrees. Drag sideways or use the arrow keys to turn it."></svg>
-        <figcaption><span class="letter">A</span><span class="caption" data-plan="20° above the orbit plane" data-tilt="Orbit plane edge-on · tilt true size">20° above the orbit plane</span><span class="hint">· drag to turn</span><button type="button" class="swap" data-show="plan">Key plan</button></figcaption>
+        <svg class="drawing" id="view-a" tabindex="0" role="img" aria-label="View A: ${esc(named(id))}, axis tilted ${obliquity} degrees from the orbit normal, with a scale bar in km. Drag sideways or use the arrow keys to turn it."></svg>
+        <figcaption><span class="letter">A</span><span class="caption" data-plan="20° above the orbit plane" data-tilt="Orbit plane edge-on · tilt true size">20° above the orbit plane</span><span class="hint">· drag to turn · <span class="si">1 s = 1 h</span></span><button type="button" class="swap" data-show="plan">Key plan</button><button type="button" id="pause">Pause</button></figcaption>
       </figure>
       <figure class="view key-plan">
         <svg class="drawing clip" id="key-plan" role="img" aria-label="${esc(planLabel)}" data-label="${esc(planLabel)}" data-edge-label="${esc(edgeLabel)}"></svg>
         <figcaption><span class="caption" data-plan="${planCaption}" data-edge="${edgeCaption}">${planCaption}</span><button type="button" class="swap" data-show="a">View A</button></figcaption>
       </figure>
     </section>
-    <section class="schedule" aria-label="Schedule">
-      <h2 class="label">Schedule — NASA Planetary Fact Sheet</h2>
+    <section class="schedule" id="schedule" aria-labelledby="schedule-caption">
+      <div class="og" aria-hidden="true"><svg class="title-lettering" data-text="${esc(name.toUpperCase())}" data-size="xl"></svg><p>Planetary · Unofficial</p></div>
       <table class="main">
-        <thead><tr><th scope="col">Parameter</th><th scope="col">${esc(name.toUpperCase())}</th>${id === 'earth' ? '' : '<th scope="col">× Earth</th>'}</tr></thead>
+        <caption id="schedule-caption" class="label">NASA Planetary Fact Sheet</caption>
         <tbody>
           ${rows}
         </tbody>
       </table>
-      ${definitionBox}
-      <div id="drawn-values">${drawnFromBodyPage(id)}</div>
-      <p class="more"><span>Rows marked ⊢⊣ are drawn. Point at one.</span><a href="${body(id).url}">NASA ${esc(name)} fact sheet ↗</a></p>
+      <p class="legend"><span class="mark" aria-hidden="true"></span> drawn · <span class="pointer">click</span><span class="touch">tap</span> a row for NASA’s definition</p>
     </section>
-    ${notesBlock(id)}
-    ${titleBlock({ ...sheet, id }, ctx)}
-    ${infoButton('Notes and sources')}
   </main>
-  ${infoDialog(`${esc(name)}: notes and sources`, `<p>Unofficial: not affiliated with or endorsed by NASA.</p>${generalNotes(id)}`)}`;
+  ${infoDialog(`${esc(name)}: notes and sources`, info(id, sheet, ctx))}`;
   return {
     html,
-    data: { sheet: id, defs: definitions(), body: b, plan },
+    data: { sheet: id, body: b, plan },
     description,
     title: `${sheet.title} — Planetary`,
     ogAlt: `${named(id, true)} drawn as an engineering drawing from NASA’s Planetary Fact Sheet`,

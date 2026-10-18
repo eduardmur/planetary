@@ -1,11 +1,13 @@
 // Typed access to NASA's values (src/data/factsheet.json). Accessors throw when a value the drawings
 // rely on is missing, so a change on NASA's pages fails the build instead of drawing nonsense.
 
+import ledger from './discrepancies.json' with { type: 'json' };
 import raw from './factsheet.json' with { type: 'json' };
 import {
   BODY_IDS,
   type BodyId,
   type BodySheet,
+  type Discrepancy,
   type FactSheet,
   type MainRow,
   type Row,
@@ -13,8 +15,10 @@ import {
 } from './types.ts';
 
 export const FACTS = raw as unknown as FactSheet;
+/** Where NASA's pages conflict, each with the body and the schedule row it concerns. */
+export const DISCREPANCIES = ledger as unknown as Discrepancy[];
 export { BODY_IDS };
-export type { BodyId, BodySheet, MainRow, Row, Val };
+export type { BodyId, BodySheet, Discrepancy, MainRow, Row, Val };
 
 export type Section =
   'bulk' | 'orbital' | 'observational' | 'elements' | 'pole' | 'magnetosphere' | 'atmosphere';
