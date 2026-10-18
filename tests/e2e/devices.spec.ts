@@ -125,6 +125,39 @@ test.describe('iPhone 13 on its side', () => {
     await settled(page);
     expect((await rect(page, '#def-obliquity')).height).toBeGreaterThanOrEqual(240);
   });
+
+  test('a popover goes under the header with its row, never over the tabs', async ({
+    page,
+  }, info) => {
+    only(info, 'webkit');
+    await page.goto('uranus/');
+    await drawn(page);
+    await page.locator('#b-mass').tap();
+    await expect(page.locator('#def-mass')).toBeVisible();
+    await settled(page);
+    // A drag scrolls the page (the drawings let vertical swipes through).
+    await page.evaluate(() => scrollBy(0, 180));
+    await page.waitForTimeout(300);
+    const res = await page.evaluate(() => {
+      const def = document.getElementById('def-mass')!;
+      const d = def.getBoundingClientRect();
+      const m = /inset\(([\d.]+)px/.exec(getComputedStyle(def).clipPath);
+      const head = document.querySelector('.tabs')!.getBoundingClientRect().bottom;
+      const over = (el: Element) => {
+        const r = el.getBoundingClientRect();
+        return def.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+      };
+      return {
+        top: d.top + (m ? parseFloat(m[1]!) : 0),
+        head,
+        tabs: [...document.querySelectorAll('.tabs a, .tabs button')].some(over),
+      };
+    });
+    expect(res.top).toBeGreaterThanOrEqual(res.head - 0.5);
+    expect(res.tabs).toBe(false);
+    await page.locator('.tabs a[data-body="neptune"]').tap();
+    await expect(page).toHaveURL(/\/neptune\/#mass$/);
+  });
 });
 
 // Too narrow for the table beside the drawings: the drawings go above it, and nothing scrolls
