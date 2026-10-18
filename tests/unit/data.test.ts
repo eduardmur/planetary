@@ -394,6 +394,13 @@ describe('(a) structure', () => {
     });
     expect(data.main.lastUpdated).toBe('18 March 2025');
     expect(body('saturn').rings?.lastUpdated).toBe('19 April 2022');
+    // The three notes pages every definition comes from, keyed as the definitions are.
+    const notes = (file: string, lastUpdated: string) => ({ url: data.source + file, lastUpdated });
+    expect(data.definitions.pages).toEqual({
+      main: notes(PAGES.mainNotes, '20 December 2021'),
+      ratio: notes(PAGES.ratioNotes, '17 July 2015'),
+      sheet: notes(PAGES.sheetNotes, '6 May 2024'),
+    });
     expect(data.retrieved).toBe('2026-10-17T18:10:27.703Z');
     expect(data.source).toBe('https://nssdc.gsfc.nasa.gov/planetary/factsheet/');
   });
@@ -537,6 +544,12 @@ describe('(b) every printed string is on its source page', () => {
     for (const t of [...defs.sources, defs.caveat]) check(PAGES.sheetNotes, 'source', t);
     for (const [k, list] of Object.entries(defs.notes ?? {})) {
       if (k !== 'main') for (const n of list) check(PAGES.sheetNotes, `notes.${k}`, n);
+    }
+    const dated = { main: PAGES.mainNotes, ratio: PAGES.ratioNotes, sheet: PAGES.sheetNotes };
+    for (const [k, file] of Object.entries(dated)) {
+      const p = defs.pages[k as keyof typeof dated];
+      check(file, `pages.${k}`, `Last Updated: ${p.lastUpdated},`);
+      expect(p.url).toBe(`https://nssdc.gsfc.nasa.gov/planetary/factsheet/${file}`);
     }
     expect(missing).toEqual([]);
     expect(checked).toBeGreaterThan(300);

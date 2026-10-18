@@ -208,7 +208,19 @@ export interface Definition {
   text: string;
 }
 
+/** One of NASA's notes pages: its address and NASA's date for it. */
+export interface NotesPage {
+  url: string;
+  /** From "Last Updated: 20 December 2021, DRW" → "20 December 2021". */
+  lastUpdated: string;
+}
+
 export interface Definitions {
+  /**
+   * The three notes pages the definitions come from, keyed as the definitions are: `main`
+   * planetfact_notes.html, `ratio` planetfact_ratio_notes.html, `sheet` fact_notes.html.
+   */
+  pages: Record<'main' | 'ratio' | 'sheet', NotesPage>;
   /** planetfact_ratio_notes.html, keyed by the ratio table's row keys. */
   ratio?: Record<string, Definition>;
   /** planetfact_notes.html, keyed by MainRow.key. Footnote paragraphs ("* For the Moon…") are part of `text`. */
