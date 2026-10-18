@@ -13,10 +13,24 @@ type Hooks = {
         setDate(iso: string): void;
         positions(): Record<string, [number, number]>;
         glyphRadii(): Record<string, number>;
+        within(x: number, y: number): string[];
       };
     };
   };
 };
+
+/** The nine bodies that have a symbol, in NASA's order. */
+const PLANETS = [
+  'mercury',
+  'venus',
+  'earth',
+  'mars',
+  'jupiter',
+  'saturn',
+  'uranus',
+  'neptune',
+  'pluto',
+];
 
 const simDate = (page: Page) =>
   page.evaluate(() => (window as unknown as Hooks).__pb.views.orrery.simDate);
@@ -155,6 +169,49 @@ test('a link cut where it meets another shows its whole focus ring', async ({
   expect(await earth.evaluate((a) => getComputedStyle(a).clipPath)).toBe('none');
 });
 
+test('at 2060 the clock goes back to today, fading the bodies out and in', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto('');
+  const faded = await page.evaluate(async () => {
+    const glyphs = document.querySelector('#orrery g.glyphs')!;
+    (window as unknown as Hooks).__pb.views.orrery.setDate('2059-12-31');
+    for (const t0 = performance.now(); performance.now() - t0 < 2000;) {
+      await new Promise(requestAnimationFrame);
+      if (glyphs.getAnimations().length) return true;
+    }
+    return false;
+  });
+  expect(faded).toBe(true);
+  await expect.poll(() => simDate(page), { timeout: 2000 }).toMatch(/^20[2-5]/);
+  // Back at today's date, and running from it.
+  const today = `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`;
+  const since = days(today, await simDate(page));
+  expect(since).toBeGreaterThanOrEqual(0);
+  expect(since).toBeLessThan(10);
+  expect(errors).toEqual([]);
+});
+
+test('with reduced motion the clock goes back at 2060 at once, without a fade', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('');
+  await page.locator('#pause').click(); // Play
+  const faded = await page.evaluate(async () => {
+    const glyphs = document.querySelector('#orrery g.glyphs')!;
+    (window as unknown as Hooks).__pb.views.orrery.setDate('2059-12-31');
+    let seen = false;
+    for (const t0 = performance.now(); performance.now() - t0 < 600;) {
+      await new Promise(requestAnimationFrame);
+      seen ||= glyphs.getAnimations().length > 0;
+    }
+    return seen;
+  });
+  expect(faded).toBe(false);
+  await expect.poll(() => simDate(page), { timeout: 2000 }).toMatch(/^20[2-5]/);
+});
+
 test('pointing at a body names it and stops the clock until the mouse leaves', async ({
   page,
   isMobile,
@@ -209,6 +266,46 @@ test('a still mouse keeps a fast body it points at, and the click opens it', asy
   await page.mouse.down();
   await page.mouse.up();
   await expect(page).toHaveURL(/\/mercury\/$/);
+});
+
+test('a name is lettered off its own orbit', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'mouse');
+  // 1440×900 on 2026-10-18: Pluto's orbit used to run through PLUTO.
+  await page.goto('?capture&date=2026-10-18');
+  const lettered = () =>
+    page.evaluate(
+      () => document.querySelector('#orrery > .layer-text-l path')?.getAttribute('d') ?? '',
+    );
+  for (const id of PLANETS) {
+    const before = await lettered();
+    const p = await at(page, id);
+    await page.mouse.move(p.x, p.y);
+    await expect(page.locator('#orrery')).toHaveAttribute('data-active', id);
+    // The next frame letters the name.
+    await expect.poll(lettered).not.toBe(before);
+    await expect.poll(lettered).not.toBe('');
+    const through = await page.evaluate((id) => {
+      const svg = document.getElementById('orrery')!;
+      const name = svg.querySelector<SVGPathElement>(':scope > .layer-text-l path[d]:not([d=""])')!;
+      const b = name.getBBox();
+      const d = svg.querySelector(`.orbits [data-ref="${id}"]`)!.getAttribute('d')!;
+      const pts = [...d.matchAll(/[ML]([-\d.]+) ([-\d.]+)/g)].map((m) => [+m[1]!, +m[2]!]);
+      // Length of orbit inside the name's box, px, every 0.5 px along it.
+      let inside = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = pts[i - 1]!,
+          [bx, by] = pts[i]!;
+        const n = Math.max(1, Math.ceil(Math.hypot(bx! - ax!, by! - ay!) / 0.5));
+        for (let k = 0; k < n; k++) {
+          const x = ax! + ((bx! - ax!) * k) / n,
+            y = ay! + ((by! - ay!) * k) / n;
+          if (x > b.x && x < b.x + b.width && y > b.y && y < b.y + b.height) inside += 0.5;
+        }
+      }
+      return inside;
+    }, id);
+    expect(through, id).toBe(0);
+  }
 });
 
 test('a click on a planet or on the Moon’s ring opens its page', async ({ page, isMobile }) => {
@@ -322,6 +419,86 @@ test('a tap among several bodies opens a chooser; a tap on one opens its page', 
   const jupiter = await at(page, 'jupiter');
   await page.touchscreen.tap(jupiter.x, jupiter.y);
   await expect(page).toHaveURL(/\/jupiter\/$/);
+});
+
+test('a finger held on a body sees its name clear of the fingertip', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(!isMobile, 'touch');
+  await page.goto('?capture&date=2026-10-18');
+  const name = page.locator('#orrery > .layer-text-l path[d]:not([d=""])');
+  // A real held touch where the browser allows one: Pluto, whose name used to fall under the finger.
+  if (browserName === 'chromium') {
+    const p = await at(page, 'pluto');
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: p.x, y: p.y }],
+    });
+    await expect(page.locator('#orrery')).toHaveAttribute('data-active', 'pluto');
+    expect((await name.boundingBox())!.y + (await name.boundingBox())!.height).toBeLessThanOrEqual(
+      p.y - 30,
+    );
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+    await expect(page.locator('#orrery')).not.toHaveAttribute('data-active');
+  }
+  // Every body alone within reach, pressed at its centre (the same pointerdown, from script): the
+  // name stays out of the 56 px square round the contact point.
+  const near = await page.evaluate(async () => {
+    const o = (window as unknown as Hooks).__pb.views.orrery;
+    const svg = document.getElementById('orrery')!;
+    const box = svg.getBoundingClientRect();
+    const lettered = () =>
+      svg.querySelector<SVGPathElement>(':scope > .layer-text-l path[d]:not([d=""])');
+    /** The name once the next frames have lettered it (or cleared it), within 2 s. */
+    const settle = async (want: boolean) => {
+      for (const t0 = performance.now(); performance.now() - t0 < 2000;) {
+        await new Promise(requestAnimationFrame);
+        if (!!lettered() === want) break;
+      }
+      return lettered();
+    };
+    const out: Record<string, number> = {};
+    for (const [id, [x, y]] of Object.entries(o.positions())) {
+      if (o.within(x, y).length !== 1) continue;
+      const press = (type: string) =>
+        svg.closest('.orrery')!.dispatchEvent(
+          new PointerEvent(type, {
+            pointerType: 'touch',
+            clientX: box.x + x,
+            clientY: box.y + y,
+            bubbles: true,
+          }),
+        );
+      press('pointerdown');
+      const r = (await settle(true))!.getBBox();
+      out[id] = Math.max(r.x - x, x - (r.x + r.width), r.y - y, y - (r.y + r.height));
+      press('pointercancel');
+      await settle(false);
+    }
+    return out;
+  });
+  expect(Object.keys(near).length).toBeGreaterThan(4);
+  for (const [id, d] of Object.entries(near)) expect(d, id).toBeGreaterThanOrEqual(28);
+});
+
+test('turning the phone closes the chooser', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'touch');
+  await page.goto('');
+  await page.evaluate(() => (window as unknown as Hooks).__pb.views.orrery.setDate('2026-10-18'));
+  const earth = await at(page, 'earth');
+  await page.touchscreen.tap(earth.x, earth.y);
+  const chooser = page.locator('.chooser:popover-open');
+  await expect(chooser).toBeVisible();
+  await page.setViewportSize({ width: 664, height: 390 });
+  await expect(chooser).toHaveCount(0);
+  // The candidates go dark and the clock runs again.
+  await expect(page.locator('#orrery [data-ref].hot')).toHaveCount(0);
+  const a = await simDate(page);
+  await page.waitForTimeout(800);
+  expect(days(a, await simDate(page))).toBeGreaterThan(0);
 });
 
 test('on a touch screen wider than 860 px, a tap just above Pause still toggles it', async ({

@@ -33,10 +33,13 @@ export function initHome(data: PageData) {
   // Mouse and keyboard: the body under the mouse, else the one with keyboard focus, is named.
   let hovered: string | null = null;
   let focused: string | null = null;
+  // Back from the back-forward cache, Chrome replays pointerenter where the mouse clicked, though it
+  // has moved since: until the mouse really moves, the links ignore it.
+  let stale = false;
   const point = () => view.setActive(hovered ?? focused);
   for (const [id, a] of links) {
     a.addEventListener('pointerenter', (e) => {
-      if (e.pointerType !== 'mouse') return;
+      if (e.pointerType !== 'mouse' || stale) return;
       hovered = id;
       point();
     });
@@ -56,19 +59,24 @@ export function initHome(data: PageData) {
       point();
     });
   }
+  orrery.addEventListener('pointermove', (e) => {
+    if (!stale || e.pointerType !== 'mouse') return;
+    stale = false;
+    hovered =
+      (e.target as Element).closest<HTMLElement>('nav.bodies a[data-body]')?.dataset.body ?? null;
+    point();
+  });
 
-  // Touch and pen: the bodies within reach of the finger, named while it is down if there is one.
+  // Touch and pen: the bodies within reach of the finger, named while it is down if there is one
+  // (clear of the fingertip).
   let tap: { ids: string[]; x: number; y: number } | null = null;
   orrery.addEventListener('pointerdown', (e) => {
     tap = null;
     if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
     const box = svg.getBoundingClientRect();
-    tap = {
-      ids: view.within(e.clientX - box.left, e.clientY - box.top),
-      x: e.clientX,
-      y: e.clientY,
-    };
-    if (tap.ids.length === 1) view.setActive(tap.ids[0]!);
+    const at: [number, number] = [e.clientX - box.left, e.clientY - box.top];
+    tap = { ids: view.within(...at), x: e.clientX, y: e.clientY };
+    if (tap.ids.length === 1) view.setActive(tap.ids[0]!, { at });
   });
   const lift = () => {
     if (tap?.ids.length === 1) view.setActive(null);
@@ -107,13 +115,17 @@ export function initHome(data: PageData) {
   });
 
   // Back from a body's page (the back-forward cache keeps this one as it was), the mouse is no
-  // longer on the body it clicked, and the chooser is done with.
+  // longer on the body it clicked (whatever pointerenter says before it moves), and the chooser is
+  // done with.
   addEventListener('pageshow', (e) => {
     if (!e.persisted) return;
     hovered = null;
+    stale = true;
     chooser.hidePopover();
     point();
   });
+  // Turning the phone moves the bodies away from the tap that chose them.
+  matchMedia('(orientation: portrait)').addEventListener('change', () => chooser.hidePopover());
 
   /** Open the chooser above the tap if 200 px are free there, else below, inside the frame. */
   function choose(ids: string[], x: number, y: number) {

@@ -16,7 +16,7 @@ import {
   type MeanElements,
 } from '../astro/index.ts';
 import type { OrreryBody, OrreryModel } from '../data/orrery.ts';
-import { LabelPlacer, spotsToward, type Box, type Spot } from '../draw/labels.ts';
+import { LabelPlacer, spotsToward, type Box, type LabelReq, type Spot } from '../draw/labels.ts';
 import { DrawList, SvgScene } from '../draw/svg.ts';
 import { DEG, clamp, len, scale, type Vec2, type Vec3 } from '../draw/vec.ts';
 import { drawGlyph } from './glyph.ts';
@@ -49,6 +49,8 @@ const START = 500;
 const FADE = 300;
 /** Wide pen, CSS px (approx.). */
 const PEN = 1.7;
+/** Half the side of the square a pressing fingertip covers round its contact point, px. */
+const FINGER = 28;
 /** The Moon's link reaches this far outside its ring, px. */
 const MOON_LINK = 10;
 
@@ -98,6 +100,8 @@ interface Planet {
   /** Position now, px, and depth toward the camera. */
   at: Vec2;
   depth: number;
+  /** The orbit as drawn, px. */
+  path: Vec2[];
   /** Radius of the link over it, whole px, and the clip-path last written to it. */
   reach: number;
   clip: string;
@@ -185,6 +189,8 @@ export class OrreryView extends View {
   /** Bodies drawn in yellow, and the one whose name is lettered. */
   private lit = new Set<string>();
   private pointed: string | null = null;
+  /** Where a finger presses the body pointed at, px in the drawing, or null (mouse, keyboard). */
+  private touchAt: Vec2 | null = null;
 
   constructor(
     svg: SVGSVGElement,
@@ -218,6 +224,7 @@ export class OrreryView extends View {
         box: { x0: 0, y0: 0, x1: 0, y1: 0 },
         at: [0, 0],
         depth: 0,
+        path: [],
         reach: 0,
         clip: '',
       };
@@ -288,6 +295,7 @@ export class OrreryView extends View {
     for (const p of this.planets) {
       const pts: Vec2[] = [];
       for (let k = 0; k <= 360; k++) pts.push(this.at(orbitPointAtTrueAnomaly(p.orbit, k)));
+      p.path = pts;
       dl.polyline(pts, 'center', p.m.id);
     }
     // ☉: a wide circle, its outer edge on the radius, and a centre dot.
@@ -440,7 +448,11 @@ export class OrreryView extends View {
     }
   }
 
-  /** The name of the body pointed at, 6 px outside its symbol on the side away from the Sun. */
+  /**
+   * The name of the body pointed at, 6 px outside its symbol on the side away from the Sun, off the
+   * other symbols, the Sun and its own orbit. Under a finger it goes above the fingertip instead, or
+   * beside it, and never under it.
+   */
   private letterName() {
     const dl = new DrawList();
     const id = this.pointed;
@@ -452,6 +464,8 @@ export class OrreryView extends View {
         .map((o) => shift(o.box, o.at))
         .concat(this.sunBox());
       const labels = new LabelPlacer({ x0: 4, y0: 4, x1: this.w - 4, y1: this.h - 4 }, others);
+      // Its orbit is lit with it: keep the name off it, as the key plans do.
+      if (id !== 'moon') labels.line(p.path);
       const sun = this.px([0, 0, 0]);
       const text = (this.links.get(id)?.textContent ?? id).trim().toUpperCase();
       const cx = p.at[0] + (box.x0 + box.x1) / 2,
@@ -459,14 +473,27 @@ export class OrreryView extends View {
       const hw = (box.x1 - box.x0) / 2,
         hh = (box.y1 - box.y0) / 2;
       // One anchor per spot, on the ellipse inscribed in the symbol's box, nearest the Sun last.
-      const reqs = spotsToward(p.at[0] - sun[0], p.at[1] - sun[1]).map((spot) => ({
+      let reqs: LabelReq[] = spotsToward(p.at[0] - sun[0], p.at[1] - sun[1]).map((spot) => ({
         x: cx + DIRS[spot][0] * hw,
         y: cy + DIRS[spot][1] * hh,
         text,
-        size: 'l' as const,
+        size: 'l',
         spots: [spot],
         gap: 6,
       }));
+      if (this.touchAt) {
+        // A fingertip hides about FINGER px each way of the point it presses: the name goes above it
+        // (and above the body's own symbol), else beside it, else at a spot it leaves clear.
+        const [tx, ty] = this.touchAt;
+        const tip: Box = { x0: tx - FINGER, y0: ty - FINGER, x1: tx + FINGER, y1: ty + FINGER };
+        const top = Math.min(ty, p.at[1] + box.y0);
+        reqs = [
+          { x: tx, y: top, text, size: 'l', spots: ['t'], gap: FINGER + 4 },
+          { x: tx, y: top, text, size: 'l', spots: ['tl', 'tr'], gap: FINGER / 0.7 },
+          { x: tx, y: ty, text, size: 'l', spots: ['l', 'r'], gap: FINGER + 8 },
+          ...reqs.filter((r) => !meets(labels.boxFor(r, r.spots![0]!), tip)),
+        ];
+      }
       labels.placeAny(dl, reqs);
     }
     this.scene.commit(dl);
@@ -498,9 +525,13 @@ export class OrreryView extends View {
 
   // ---- Pointing, Pause and hooks ----------------------------------------------------------------
 
-  /** Point at a body or the Moon (null: none): it lights up, its name is lettered, the clock stops. */
-  setActive(id: string | null) {
+  /**
+   * Point at a body or the Moon (null: none): it lights up, its name is lettered, the clock stops.
+   * `at` is where a finger presses, px in the drawing: the name then keeps clear of the fingertip.
+   */
+  setActive(id: string | null, opts: { at?: Vec2 } = {}) {
     this.pointed = id;
+    this.touchAt = id ? (opts.at ?? null) : null;
     if (id) this.svg.dataset.active = id;
     else delete this.svg.dataset.active;
     this.light(id ? [id] : []);
@@ -577,4 +608,9 @@ function union(a: Box, b: Box): Box {
 
 function shift(b: Box, d: Vec2): Box {
   return { x0: b.x0 + d[0], y0: b.y0 + d[1], x1: b.x1 + d[0], y1: b.y1 + d[1] };
+}
+
+/** Whether two boxes overlap (touching is not overlapping). */
+function meets(a: Box, b: Box): boolean {
+  return a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
 }
