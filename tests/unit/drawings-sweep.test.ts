@@ -204,9 +204,18 @@ describe("View A's description", () => {
 
 describe('a spinning body', () => {
   // Nothing its lettering goes by turns with it: each frame letters the labels where the first one
-  // did, without pricing a place again, and takes no longer than a body without a dipole.
+  // did, without pricing a place again. The time is measured against a first frame on the same
+  // machine, since CI's runners are slower than a laptop.
+  const median = (ms: number[]) => ms.sort((a, b) => a - b)[ms.length >> 1]!;
   for (const id of ['earth', 'jupiter'] as BodyId[])
-    it(`${id} letters its frames without looking for places, in under 2 ms each`, () => {
+    it(`${id} letters its frames without looking for places, in under half a first frame's time`, () => {
+      const first: number[] = [];
+      for (let i = 0; i < 11; i++) {
+        const fresh = viewA(id, '390x844');
+        const t0 = performance.now();
+        drawOf(fresh, new DrawList());
+        first.push(performance.now() - t0);
+      }
       const v = viewA(id, '390x844');
       drawOf(v, new DrawList());
       const priced = [
@@ -225,6 +234,6 @@ describe('a spinning body', () => {
       } finally {
         for (const spy of priced) spy.mockRestore();
       }
-      expect(ms.sort((a, b) => a - b)[15]).toBeLessThan(2);
+      expect(median(ms)).toBeLessThan(median(first) / 2);
     });
 });
