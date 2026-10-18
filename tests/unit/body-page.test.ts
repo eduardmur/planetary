@@ -273,9 +273,6 @@ describe('body pages', () => {
         steps.querySelectorAll('button.step').map((b) => b.getAttribute('aria-label')),
       ).toEqual(['Previous row', 'Next row']);
       expect(root.querySelector('table.main caption')!.querySelector('button')).toBeNull();
-      expect(root.querySelector('.view-a .caption')!.getAttribute('data-edge-on')).toBe(
-        'Orbit plane edge-on',
-      );
     }
   });
 

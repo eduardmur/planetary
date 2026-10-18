@@ -55,7 +55,8 @@ const camera = (page: Page) =>
   });
 const show = (page: Page, key: string | null) =>
   page.evaluate((k) => (window as unknown as Hooks).__pb.show(k), key);
-const caption = (page: Page) => page.locator('.view-a .caption');
+/** View A's caption in full (the desktop layout's). */
+const caption = (page: Page) => page.locator('.view-a .caption .long');
 const outline = (l: Locator) => l.evaluate((el) => getComputedStyle(el).outlineStyle);
 
 for (const id of BODIES) {
@@ -842,7 +843,7 @@ test('captions of View A and the key plan share one baseline', async ({ page, is
   await page.goto('saturn/');
   await drawn(page);
   const [a, p] = await page.evaluate(() =>
-    ['.view-a .caption', '.key-plan .caption'].map((s) => {
+    ['.view-a .caption .long', '.key-plan .caption > :first-child'].map((s) => {
       const r = document.createRange();
       r.selectNodeContents(document.querySelector(s)!);
       return r.getClientRects()[0]!.bottom;

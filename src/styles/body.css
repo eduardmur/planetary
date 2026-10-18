@@ -265,6 +265,10 @@ html:not(.js) .sheet-body .tabs .strip {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* In full; phones take the short form (below). */
+.sheet-body .view-a .caption .short {
+  display: none;
+}
 @container (max-width: 560px) {
   .sheet-body .view-a .hint {
     display: none;
@@ -279,6 +283,19 @@ html:not(.js) .sheet-body .tabs .strip {
 .sheet-body .view.key-plan figcaption {
   position: static;
   margin: 4px 14px 8px;
+}
+/* The plan's two captions, square on and edge-on, take one place, as tall as the taller of them, so
+   the plan keeps its size as it turns; the one shown sits at the foot. */
+.sheet-body .key-plan .caption {
+  display: grid;
+}
+.sheet-body .key-plan .caption > span {
+  grid-area: 1 / 1;
+  align-self: end;
+}
+.sheet-body .key-plan .caption:not([data-edge]) > :last-child,
+.sheet-body .key-plan .caption[data-edge] > :first-child {
+  visibility: hidden;
 }
 .sheet-body .view figcaption .letter {
   font-size: 18px;
@@ -320,9 +337,9 @@ html:not(.js) .sheet-body .tabs .strip {
   .sheet-body .view figcaption .swap {
     display: none;
   }
-  /* Room for the longer caption of the turned plan, so the plan does not shrink as it turns; one
-     line sits at the bottom. The two captions share one baseline: View A's line is set by its
-     text, and Pause's padding and border hang below it. */
+  /* Two lines at least, which most turned captions take; one line sits at the bottom. The two
+     views' captions share one baseline: View A's line is set by its text, and Pause's padding and
+     border hang below it. */
   .sheet-body .view.key-plan figcaption {
     min-height: calc(2 * 1.35em);
     align-items: flex-end;
@@ -827,8 +844,12 @@ html:not(.js) .sheet-body .tabs .strip {
   .sheet-body .views.show-plan .view-a {
     display: none;
   }
-  .sheet-body .view-a .hint {
+  .sheet-body .view-a .hint,
+  .sheet-body .view-a .caption .long {
     display: none;
+  }
+  .sheet-body .view-a .caption .short {
+    display: inline;
   }
   .sheet-body .view figcaption,
   .sheet-body .view-a figcaption {

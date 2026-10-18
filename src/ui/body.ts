@@ -122,21 +122,21 @@ export function initBody(data: PageData) {
   for (const b of document.querySelectorAll<HTMLButtonElement>('figcaption .swap'))
     b.addEventListener('click', () => showPlan(b.dataset.show === 'plan'));
 
-  /** Captions follow the views: View A's says where its camera is (or is turning to); the key plan's
-   *  turns edge-on with the inclination. */
-  const capA = document.querySelector<HTMLElement>('.view-a .caption');
+  /** Captions follow the views: View A's says where its camera is (or is turning to), in full and
+   *  in short; the key plan's turns edge-on with the inclination. */
+  const capsA = document.querySelectorAll<HTMLElement>('.view-a .caption > span');
   const capP = document.querySelector<HTMLElement>('.key-plan .caption');
-  const setText = (el: HTMLElement | null, text: string | undefined) => {
-    if (el && text !== undefined && el.textContent !== text) el.textContent = text;
-  };
   function captions(key: string | null) {
     const edge = key === 'orbitalInclination';
-    if (capA && viewA) {
+    if (viewA) {
       const at = viewA.aspect;
-      const d = capA.dataset;
-      setText(capA, at === 'tilt' ? d.tilt : at === 'edge' ? d.edgeOn : d.plan);
+      for (const c of capsA) {
+        const text =
+          at === 'tilt' ? c.dataset.tilt : at === 'edge' ? c.dataset.edgeOn : c.dataset.plan;
+        if (text !== undefined && c.textContent !== text) c.textContent = text;
+      }
     }
-    setText(capP, edge ? capP?.dataset.edge : capP?.dataset.plan);
+    capP?.toggleAttribute('data-edge', edge);
     for (const s of document.querySelectorAll<SVGSVGElement>('svg[data-edge-label]'))
       s.setAttribute('aria-label', (edge ? s.dataset.edgeLabel : s.dataset.label) ?? '');
   }

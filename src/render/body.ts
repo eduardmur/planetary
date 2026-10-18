@@ -357,6 +357,9 @@ export function bodySheet(id: BodyId, sheet: Sheet, ctx: PageCtx): Rendered {
   const edgeCaption = moon
     ? 'Key plan · edge-on to the ecliptic'
     : 'Key plan · edge-on, along the line of nodes';
+  // Where View A's camera is, in full and in short for phones (body.css shows one of them).
+  const viewCaption = (cls: string, plan: string, tilt: string, edgeOn: string) =>
+    `<span class="${cls}" data-plan="${plan}" data-tilt="${tilt}" data-edge-on="${edgeOn}">${plan}</span>`;
   const html = `<main class="sheet sheet-body" aria-labelledby="sheet-title">
     <span class="marks" aria-hidden="true"></span>
     <a class="skip" href="#schedule">Skip to table</a>
@@ -366,11 +369,11 @@ export function bodySheet(id: BodyId, sheet: Sheet, ctx: PageCtx): Rendered {
       <p class="noscript">The drawings need JavaScript, which is off or did not load. NASA’s values and definitions work without it.</p>
       <figure class="view view-a">
         <svg class="drawing" id="view-a" tabindex="0" role="img" aria-label="View A: ${esc(named(id))}, axis tilted ${obliquity} degrees from the orbit normal, with a scale bar in km. Drag sideways or use the arrow keys to turn it."></svg>
-        <figcaption><span class="letter">A</span><span class="caption" data-plan="20° above the orbit plane" data-tilt="Tilt true size · orbit plane edge-on" data-edge-on="Orbit plane edge-on">20° above the orbit plane</span><span class="hint">· drag to turn · <span class="si">1 s = 1 h</span></span><button type="button" class="swap" data-show="plan">Key plan</button><button type="button" id="pause">Pause</button></figcaption>
+        <figcaption><span class="letter">A</span><span class="caption">${viewCaption('long', '20° above the orbit plane', 'Tilt true size · orbit plane edge-on', 'Orbit plane edge-on')}${viewCaption('short', '20° above orbit', 'Tilt true size', 'Orbit edge-on')}</span><span class="hint">· drag to turn · <span class="si">1 s = 1 h</span></span><button type="button" class="swap" data-show="plan">Key plan</button><button type="button" id="pause">Pause</button></figcaption>
       </figure>
       <figure class="view key-plan">
         <svg class="drawing clip" id="key-plan" role="img" aria-label="${esc(planLabel)}" data-label="${esc(planLabel)}" data-edge-label="${esc(edgeLabel)}"></svg>
-        <figcaption><span class="caption" data-plan="${planCaption}" data-edge="${edgeCaption}">${planCaption}</span><button type="button" class="swap" data-show="a">View A</button></figcaption>
+        <figcaption><span class="caption"><span>${planCaption}</span><span>${edgeCaption}</span></span><button type="button" class="swap" data-show="a">View A</button></figcaption>
       </figure>
     </section>
     <section class="schedule" id="schedule" aria-labelledby="schedule-caption">
