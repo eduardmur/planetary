@@ -5,8 +5,8 @@
 // to it; directions, inclinations and the poles of rotation are true.
 //
 // The orbits and the symbols are drawn when the size changes. A frame only moves each symbol's group
-// and the link over it (the links are the pointer targets), re-sorts the groups by depth, and letters
-// the name of the body pointed at.
+// and the link over it (the links are the pointer targets, split where they overlap), re-sorts the
+// groups by depth, and letters the name of the body pointed at.
 
 import {
   dateFromJulian,
@@ -42,13 +42,15 @@ export function symbolDiameter(diameter: number, R: number, dMax: number): numbe
 const DAYS_PER_SECOND = 365.25 / 60;
 /** The clock goes back to its start when it reaches 2060, the end of the positions' stated accuracy. */
 const UNTIL = julianDate(new Date(Date.UTC(2060, 0, 1)));
-/** Pointing at a body stops the clock over STOP ms; letting go starts it over START ms. */
-const STOP = 250;
+/** Pointing at a body stops the clock at once, so the body stays under a still pointer; letting go
+ *  starts it over START ms. */
 const START = 500;
 /** The bodies fade out and back in over FADE ms when the clock goes back. */
 const FADE = 300;
 /** Wide pen, CSS px (approx.). */
 const PEN = 1.7;
+/** The Moon's link reaches this far outside its ring, px. */
+const MOON_LINK = 10;
 
 const NS = 'http://www.w3.org/2000/svg';
 const S = Math.SQRT1_2;
@@ -64,7 +66,8 @@ const DIRS: Record<Spot, Vec2> = {
   bl: [-S, S],
 };
 
-/** The orbit as drawn: main-table q and Q, J2000 orientation (as on the key plans). */
+/** The orbit as drawn: main-table q, Q and inclination, J2000 node and perihelion (as on the key
+ *  plans). */
 function drawn(o: OrbitShape): MeanElements {
   return {
     a: (o.q + o.Q) / 2,
@@ -95,8 +98,59 @@ interface Planet {
   /** Position now, px, and depth toward the camera. */
   at: Vec2;
   depth: number;
-  /** Radius of the link over it, whole px. */
+  /** Radius of the link over it, whole px, and the clip-path last written to it. */
   reach: number;
+  clip: string;
+}
+
+/** A body's link: its centre, its symbol's radius and the radius of the link's circle, px. */
+export interface LinkDisc {
+  at: Vec2;
+  r: number;
+  reach: number;
+}
+
+/**
+ * The part of a link's circle that its body keeps where the circle overlaps others, as a polygon
+ * about the centre (px), or null when it overlaps none. Two circles are cut at the power line of the
+ * two symbols, |x − c|² − r² equal for both: it runs through the points where their outlines cross,
+ * or between them when they do not, so each body keeps every point of its symbol that the other's
+ * does not cover, and two links never overlap.
+ */
+export function linkRegion(p: LinkDisc, others: readonly LinkDisc[]): Vec2[] | null {
+  let poly: Vec2[] | null = null;
+  for (const o of others) {
+    const dx = o.at[0] - p.at[0],
+      dy = o.at[1] - p.at[1];
+    const d = Math.hypot(dx, dy);
+    if (d >= p.reach + o.reach || d < 1e-6) continue;
+    // Distance of the power line from p's centre, toward o.
+    const s = (d * d + p.r * p.r - o.r * o.r) / (2 * d);
+    if (s >= p.reach) continue;
+    poly ??= Array.from({ length: 40 }, (_, k): Vec2 => {
+      const t = (k / 40) * 2 * Math.PI;
+      return [p.reach * Math.cos(t), p.reach * Math.sin(t)];
+    });
+    poly = clipHalf(poly, [dx / d, dy / d], s);
+  }
+  return poly;
+}
+
+/** The part of a convex polygon where n·x ≤ c (one step of Sutherland–Hodgman). */
+function clipHalf(poly: readonly Vec2[], n: Vec2, c: number): Vec2[] {
+  const out: Vec2[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]!,
+      b = poly[(i + 1) % poly.length]!;
+    const da = n[0] * a[0] + n[1] * a[1] - c,
+      db = n[0] * b[0] + n[1] * b[1] - c;
+    if (da <= 0) out.push(a);
+    if (da * db < 0) {
+      const t = da / (da - db);
+      out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
+    }
+  }
+  return out;
 }
 
 export interface OrreryOpts {
@@ -165,6 +219,7 @@ export class OrreryView extends View {
         at: [0, 0],
         depth: 0,
         reach: 0,
+        clip: '',
       };
     });
     this.measure();
@@ -214,11 +269,11 @@ export class OrreryView extends View {
     this.oy = (this.h - (y1 - y0) * R) / 2 + y1 * R;
     for (const p of this.planets) p.r = symbolDiameter(p.m.diameter, R, this.model.dMax) / 2;
     this.rho = 2 * (this.planet('earth')?.r ?? 0) + 6;
-    // The Moon's link is the ring's ellipse, 6 px wider all round.
+    // The Moon's link is the ring's ellipse, MOON_LINK px wider all round, under the Earth's.
     const moon = this.links.get('moon');
     if (moon) {
-      moon.style.width = `${2 * (this.rho + 6)}px`;
-      moon.style.height = `${2 * (this.rho + 6) * Math.sin(pitch)}px`;
+      moon.style.width = `${2 * (this.rho + MOON_LINK)}px`;
+      moon.style.height = `${2 * (this.rho + MOON_LINK) * Math.sin(pitch)}px`;
     }
     this.resized = true;
   }
@@ -306,10 +361,9 @@ export class OrreryView extends View {
     const dt = this.last ? Math.min(100, now - this.last) : 0;
     this.last = now;
     if (this.still) return;
+    // Stops are at once (light(), setPaused()); a start eases in.
     const target = this.target;
-    if (reducedMotion()) this.speed = target;
-    else if (this.speed > target) this.speed = Math.max(target, this.speed - dt / STOP);
-    else this.speed = Math.min(target, this.speed + dt / START);
+    this.speed = reducedMotion() ? target : Math.min(target, this.speed + dt / START);
     this.jd += (dt / 1000) * DAYS_PER_SECOND * this.speed;
     // At 2060 the clock goes back to its start, halfway through a fade of the bodies.
     if (this.jd >= UNTIL && this.wrapAt === null) {
@@ -346,27 +400,41 @@ export class OrreryView extends View {
   }
 
   /**
-   * Each link is a circle over its body that never overlaps another: r + 6 px (at least 12), but no
-   * more than half the way to the nearest other body; the Earth's leaves the Moon's ring round it.
+   * Each planet's link is a circle over it, r + 6 px and at least 12 (24 px across). Where two
+   * circles overlap they are cut between the two symbols (a clip-path, see linkRegion), so a point
+   * goes to the nearer body and no circle is made smaller. The Moon's link, the ring's ellipse,
+   * lies under the planets' links.
    */
   private moveLinks() {
-    for (const p of this.planets) {
-      if (!p.link) continue;
-      let near = Infinity;
-      for (const o of this.planets)
-        if (o !== p) near = Math.min(near, Math.hypot(o.at[0] - p.at[0], o.at[1] - p.at[1]));
-      const want = p.m.id === 'earth' ? p.r + 3 : Math.max(p.r + 6, 12);
-      const reach = Math.floor(Math.min(want, near / 2));
+    const linked = this.planets.filter((p): p is Planet & { link: HTMLAnchorElement } => !!p.link);
+    for (const p of linked) {
+      const reach = Math.floor(Math.max(p.r + 6, 12));
       if (reach !== p.reach) {
         p.reach = reach;
         p.link.style.width = p.link.style.height = `${2 * reach}px`;
       }
       p.link.style.transform = `translate(${(p.at[0] - reach).toFixed(1)}px, ${(p.at[1] - reach).toFixed(1)}px)`;
     }
+    for (const p of linked) {
+      const others = linked.filter((o) => o !== p);
+      // The polygon's points are taken from the link box's corner, reach px up and left of its centre.
+      const css = ([x, y]: Vec2) => `${(x + p.reach).toFixed(1)}px ${(y + p.reach).toFixed(1)}px`;
+      const poly = linkRegion(p, others);
+      // Nothing left (a small body right over a large one): no target for the moment.
+      const clip = !poly
+        ? ''
+        : poly.length < 3
+          ? 'inset(50%)'
+          : `polygon(${poly.map(css).join(',')})`;
+      if (clip !== p.clip) {
+        p.clip = clip;
+        p.link.style.clipPath = clip;
+      }
+    }
     const moon = this.links.get('moon');
     const earth = this.planet('earth');
     if (moon && earth) {
-      const w = this.rho + 6,
+      const w = this.rho + MOON_LINK,
         h = w * Math.sin(this.camera.pitch);
       moon.style.transform = `translate(${(earth.at[0] - w).toFixed(1)}px, ${(earth.at[1] - h).toFixed(1)}px)`;
     }
@@ -438,9 +506,13 @@ export class OrreryView extends View {
     this.light(id ? [id] : []);
   }
 
-  /** Light up bodies (the touch chooser's candidates); the clock stands while any is lit. */
+  /**
+   * Light up bodies (the touch chooser's candidates). The clock stops at once while any is lit, so
+   * a body never slips out from under a still pointer.
+   */
   light(ids: string[]) {
     this.lit = new Set(ids);
+    if (ids.length) this.speed = 0;
     this.paint();
     this.redraw();
   }

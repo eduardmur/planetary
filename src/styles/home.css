@@ -208,6 +208,10 @@
 .js .orrery .bodies a[data-body='moon'] {
   z-index: 1;
 }
+/* A link cut where it meets another (OrreryView) shows its whole focus ring. */
+.js .orrery .bodies a:focus-visible {
+  clip-path: none !important;
+}
 /* With the script, names are lettered in the drawing and the text is for screen readers. */
 .js .orrery .bodies span,
 .js .sheet-home .title-text {

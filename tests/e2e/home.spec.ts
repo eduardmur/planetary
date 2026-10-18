@@ -73,26 +73,86 @@ test('the clock runs at 1 minute = 1 year', async ({ page }) => {
   expect(days(a, b)).toBeLessThan(9);
 });
 
-test('the links over the bodies never overlap', async ({ page }) => {
-  await page.goto('');
-  for (const date of ['2026-10-18', '2030-03-01', '2035-07-15', '2041-01-01', '2052-09-30']) {
-    const circles = await page.evaluate((date) => {
-      (window as unknown as Hooks).__pb.views.orrery.setDate(date);
-      return [
+test('every point of a symbol opens its own body; no two links overlap or shrink under 24 px', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto('?capture&date=2026-10-18');
+  // Venus and the Earth close (2026-10-18), Mercury over Venus (2027-04-04), Mercury and the Earth
+  // close (2027-06-24), and other dates.
+  for (const date of [
+    '2026-10-18',
+    '2027-04-04',
+    '2027-06-24',
+    '2030-03-01',
+    '2035-07-15',
+    '2041-01-01',
+    '2052-09-30',
+  ]) {
+    const r = await page.evaluate((date) => {
+      const o = (window as unknown as Hooks).__pb.views.orrery;
+      o.setDate(date);
+      const box = document.getElementById('orrery')!.getBoundingClientRect();
+      const pos = o.positions(),
+        rad = o.glyphRadii();
+      const ids = Object.keys(pos);
+      const wrong: string[] = [];
+      let shared = 0;
+      for (const id of ids)
+        for (const f of [0.3, 0.6, 0.9])
+          for (let k = 0; k < 16; k++) {
+            const t = (k / 16) * 2 * Math.PI;
+            const x = pos[id]![0] + Math.cos(t) * f * rad[id]!,
+              y = pos[id]![1] + Math.sin(t) * f * rad[id]!;
+            // A point that two symbols cover may go to either.
+            if (
+              ids.some(
+                (j) => j !== id && Math.hypot(x - pos[j]![0], y - pos[j]![1]) < rad[j]! + 0.5,
+              )
+            )
+              continue;
+            const els = document.elementsFromPoint(box.x + x, box.y + y);
+            if (els[0]?.closest('.corner, button.info')) continue;
+            const links = els.map((e) => e.closest<HTMLElement>('a[data-body]')?.dataset.body);
+            if (new Set(links.filter((b) => b && b !== 'moon')).size > 1) shared++;
+            if (links[0] !== id) wrong.push(`${id} at ${f} r, ${k * 22.5}°: ${links[0]}`);
+          }
+      const sizes = [
         ...document.querySelectorAll<HTMLElement>('nav.bodies a:not([data-body="moon"])'),
-      ].map((a) => {
-        const r = a.getBoundingClientRect();
-        return { id: a.dataset.body, x: r.x + r.width / 2, y: r.y + r.height / 2, r: r.width / 2 };
-      });
+      ].flatMap((a) => [a.offsetWidth, a.offsetHeight]);
+      return { wrong, shared, smallest: Math.min(...sizes) };
     }, date);
-    for (const a of circles)
-      for (const b of circles)
-        if (a.id !== b.id)
-          expect(
-            Math.hypot(a.x - b.x, a.y - b.y),
-            `${a.id}/${b.id} ${date}`,
-          ).toBeGreaterThanOrEqual(a.r + b.r - 0.5);
+    expect(r.wrong, date).toEqual([]);
+    expect(r.shared, date).toBe(0);
+    expect(r.smallest, date).toBeGreaterThanOrEqual(24);
   }
+  if (isMobile) return;
+  // 1440×900: a click just outside the Earth's symbol, toward the Moon's ring, is still the Earth.
+  await page.evaluate(() => (window as unknown as Hooks).__pb.views.orrery.setDate('2026-10-18'));
+  const e = await at(page, 'earth');
+  expect(
+    await page.evaluate(
+      ({ x, y }) =>
+        document.elementFromPoint(x + 11, y)?.closest<HTMLElement>('a[data-body]')?.dataset.body,
+      e,
+    ),
+  ).toBe('earth');
+});
+
+test('a link cut where it meets another shows its whole focus ring', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(isMobile, 'keyboard');
+  // 1440×900 on 2026-10-18: the Earth's link is cut where it meets Venus's.
+  await page.goto('?capture&date=2026-10-18');
+  const earth = page.locator('a[data-body="earth"]');
+  expect(await earth.evaluate((a) => a.style.clipPath)).toMatch(/^polygon/);
+  await page.locator('a[data-body="venus"]').focus();
+  await page.keyboard.press(browserName === 'webkit' ? 'Alt+Tab' : 'Tab');
+  await expect(earth).toBeFocused();
+  expect(await earth.evaluate((a) => getComputedStyle(a).clipPath)).toBe('none');
 });
 
 test('pointing at a body names it and stops the clock until the mouse leaves', async ({
@@ -112,8 +172,7 @@ test('pointing at a body names it and stops the clock until the mouse leaves', a
     .poll(() => page.locator('#orrery .layer-text-l path[d]:not([d=""])').count())
     .toBeGreaterThan(0);
   await expect(page.locator(':popover-open, dialog[open]')).toHaveCount(0);
-  // Stopped (it eases to a stop in 250 ms).
-  await page.waitForTimeout(400);
+  // Stopped at once, so the body stays under the pointer.
   const a = await simDate(page);
   await page.waitForTimeout(500);
   expect(await simDate(page)).toBe(a);
@@ -124,6 +183,32 @@ test('pointing at a body names it and stops the clock until the mouse leaves', a
   await expect(page.locator('#orrery')).not.toHaveAttribute('data-active');
   await expect(page.locator('#orrery [data-ref].hot')).toHaveCount(0);
   await expect(page.locator('#orrery .layer-text-l path[d]:not([d=""])')).toHaveCount(0);
+});
+
+test('a still mouse keeps a fast body it points at, and the click opens it', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'mouse');
+  // Mercury at its fastest on screen: 1920×1080, 2026-11-10. Its way, from a day later.
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto('');
+  const setDate = (iso: string) =>
+    page.evaluate((iso) => (window as unknown as Hooks).__pb.views.orrery.setDate(iso), iso);
+  await setDate('2026-11-11');
+  const b = await at(page, 'mercury');
+  await setDate('2026-11-10');
+  const a = await at(page, 'mercury');
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  expect(len).toBeGreaterThan(5);
+  // 7 px behind its centre, 5 px inside the trailing edge of its 12 px link.
+  const c = await at(page, 'mercury');
+  await page.mouse.move(c.x - ((b.x - a.x) / len) * 7, c.y - ((b.y - a.y) / len) * 7);
+  await page.waitForTimeout(600);
+  await expect(page.locator('#orrery')).toHaveAttribute('data-active', 'mercury');
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(page).toHaveURL(/\/mercury\/$/);
 });
 
 test('a click on a planet or on the Moon’s ring opens its page', async ({ page, isMobile }) => {
