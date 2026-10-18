@@ -17,6 +17,7 @@ export const LAYERS = [
   'dim', // dimension, extension and leader lines
   'wide', // visible outlines
   'mark', // filled marks: arrowheads, points
+  'mask', // paper-coloured patches that interrupt the lines under a label that has nowhere clear
   'halo', // paper-coloured strokes under lettering, so letters read over lines
   'text-s', // lettering, by cap height (see lettering.ts)
   'text-m',
@@ -118,7 +119,8 @@ export class SvgScene {
         const [layer, ref] = k.split('|') as [Layer, string];
         const d = arr.join('');
         put((filled ? 'f|' : 's|') + k, layer, ref, d);
-        if (this.hit && ref && layer !== 'halo' && layer !== 'paper') put('h|' + k, 'hit', ref, d);
+        if (this.hit && ref && layer !== 'halo' && layer !== 'paper' && layer !== 'mask')
+          put('h|' + k, 'hit', ref, d);
       }
     }
     for (const [id, el] of this.paths)
