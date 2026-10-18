@@ -1,13 +1,57 @@
-// The home page: a schematic of the solar system whose bodies link to their pages.
-//
-// PLACEHOLDER from the restructuring: the static frame, the links and the dialog. The home-page work
-// fills in the drawing, the corner items and the dialog's notes (see the redesign spec, §2).
+// The home page: a schematic of the solar system whose bodies link to their pages, four items in the
+// frame's corners, and everything else (notes, sources, data) behind "?".
 
-import { BODY_SHEETS, type Sheet } from '../content/sheets.ts';
-import { orreryModel } from '../data/orrery.ts';
-import { esc, infoButton, infoDialog, type PageCtx, type Rendered } from './common.ts';
+import { BODY_SHEETS, SHEET_COUNT, type Sheet } from '../content/sheets.ts';
+import { FACTS } from '../data/index.ts';
+import { orreryModel, type OrreryModel } from '../data/orrery.ts';
+import { MIN_SYMBOL, RADIAL_POWER } from '../views/orrery.ts';
+import {
+  NOTES_MAIN,
+  NOTES_RATIO,
+  NOTES_SHEET,
+  esc,
+  infoButton,
+  infoDialog,
+  isoDate,
+  type PageCtx,
+  type Rendered,
+} from './common.ts';
 
-export function homeSheet(_sheet: Sheet, ctx: PageCtx): Rendered {
+/** How the schematic is drawn, in drafting voice. */
+function notes(m: OrreryModel): string[] {
+  return [
+    'SCHEMATIC, NOT TO SCALE. SEEN FROM 30–60° ABOVE THE ECLIPTIC (THE ANGLE FITS THE WINDOW), ♈︎ TO THE RIGHT.',
+    `DISTANCES FROM THE SUN COMPRESSED: A POINT AT r (10⁶ km) IS DRAWN AT R·(r / ${m.qMaxText})^${RADIAL_POWER}, WHERE ${m.qMaxText} IS PLUTO’S APHELION AND R FITS THE WINDOW. DIRECTIONS AND INCLINATIONS ARE TRUE; ORBIT SPACING AND SHAPES ARE NOT.`,
+    `BODIES ARE SYMBOLS: Ø ∝ √(NASA DIAMETER), AT LEAST ${MIN_SYMBOL} px. AXES POINT TO NASA’S POLE OF ROTATION (POSITIVE POLE, RIGHT-HAND RULE).`,
+    'THE RING ROUND THE EARTH IS THE MOON’S ORBIT, ENLARGED, IN THE ECLIPTIC PLANE. NASA GIVES NO NODE OR PERIGEE LONGITUDE FOR THE MOON: ORIENTATION ARBITRARY, NO POSITION SHOWN.',
+    'ORBITS FROM NASA’S MAIN-TABLE PERIHELION AND APHELION. ORIENTATION AND POSITIONS FROM THE J2000 MEAN ELEMENTS (TWO-BODY): WITHIN 0.5° OF JPL HORIZONS 1990–2060, 0.3° FOR ALL BUT MERCURY.',
+    'TIME: TODAY 00:00 UTC, RUNNING AT 1 MIN = 1 YEAR (365.25 d). AT 2060 THE CLOCK RETURNS TO TODAY. POINTING AT A BODY STOPS IT.',
+    'NASA: “THE VALUES LISTED ON THE FACTSHEETS ARE NOT ‘OFFICIAL’ VALUES … CARE SHOULD BE EXERCISED WHEN USING THESE VALUES.”',
+  ];
+}
+
+function about(sheet: Sheet, ctx: PageCtx, m: OrreryModel): string {
+  const link = (href: string, text: string) => `<a href="${href}">${text}</a>`;
+  return `<p>NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>
+      <p>Point at a planet for its name; click it to open its sheet. On a phone, tap it.</p>
+      <h3>This drawing</h3>
+      <ol class="drafting">${notes(m)
+        .map((n) => `<li>${esc(n)}</li>`)
+        .join('')}</ol>
+      <h3>Sources</h3>
+      <ul>
+        <li>${link(FACTS.main.url, 'NSSDCA Planetary Fact Sheet ↗')} (Last Updated ${isoDate(FACTS.main.lastUpdated)})</li>
+        <li>The body and ring fact sheets (dated on each body’s sheet)</li>
+        <li>${link(NOTES_MAIN, 'planetfact_notes.html ↗')} · ${link(NOTES_RATIO, 'planetfact_ratio_notes.html ↗')} · ${link(NOTES_SHEET, 'fact_notes.html ↗')}</li>
+        <li>Retrieved <span class="nowrap">${FACTS.retrieved.slice(0, 10)}</span></li>
+      </ul>
+      <h3>Data and code</h3>
+      <p>${link(`${ctx.base}data/factsheet.json`, 'factsheet.json')} · ${link(`${ctx.base}data/factsheet-main.csv`, 'factsheet-main.csv')} · ${link(`${ctx.repo}/blob/main/data/discrepancies.md`, 'Where NASA’s pages disagree ↗')} · ${link(ctx.repo, 'Source code ↗')}</p>
+      <p class="label">${sheet.dwg} · SHEET ${sheet.number} / ${SHEET_COUNT} · ${esc(sheet.title.toUpperCase())} · ${esc(sheet.docType)} · ISSUED <span class="nowrap">${ctx.issued}</span></p>`;
+}
+
+export function homeSheet(sheet: Sheet, ctx: PageCtx): Rendered {
+  const model = orreryModel(ctx.issued);
   const links = BODY_SHEETS.map(
     (s) =>
       `<li><a href="${ctx.base}${s.slug}/" data-body="${s.id}"><span>${esc(s.title)}</span></a></li>`,
@@ -15,19 +59,23 @@ export function homeSheet(_sheet: Sheet, ctx: PageCtx): Rendered {
   const html = `<main class="sheet sheet-home" aria-labelledby="sheet-title">
     <span class="marks" aria-hidden="true"></span>
     <header class="corner tl">
-      <h1 id="sheet-title"><svg class="title-lettering" data-text="PLANETARY" data-size="xl" aria-hidden="true"></svg><span class="visually-hidden">Planetary</span></h1>
+      <h1 id="sheet-title"><svg class="title-lettering" data-text="PLANETARY" data-size="xl" aria-hidden="true"></svg><span class="title-text">Planetary</span></h1>
       <p class="subtitle">NASA’s Planetary Fact Sheet, drawn · unofficial</p>
     </header>
     ${infoButton()}
     <div class="orrery">
-      <svg class="drawing" id="orrery" role="img" aria-label="Schematic of the solar system, not to scale."></svg>
+      <noscript><p class="noscript">The drawing needs JavaScript. Every body’s sheet is linked below.</p></noscript>
+      <svg class="drawing" id="orrery" role="img" aria-label="Schematic of the solar system, not to scale: the planets move on their orbits at 1 minute = 1 year, from today’s positions."></svg>
       <nav class="bodies" aria-label="Bodies"><ol>${links}</ol></nav>
     </div>
+    <p class="corner bl label js-only"><span>Not to scale · <span class="nowrap">1 min = 1 year</span></span></p>
+    <p class="corner br js-only"><time id="clock"></time> <button type="button" id="pause">Pause</button></p>
+    <svg class="title-lettering og-only" data-text="SCHEMATIC · NOT TO SCALE" data-size="l" aria-hidden="true"></svg>
   </main>
-  ${infoDialog('Planetary', '<p>NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>')}`;
+  ${infoDialog('Planetary', about(sheet, ctx, model))}`;
   return {
     html,
-    data: { sheet: 'home', orrery: orreryModel(ctx.issued) },
+    data: { sheet: 'home', orrery: model },
     title: 'Planetary — NASA’s Planetary Fact Sheet, drawn',
     description:
       'NASA’s Planetary Fact Sheet drawn as engineering drawings: a moving schematic of the solar system and one sheet for each of its ten bodies, every dimension from NASA’s numbers. Unofficial; not affiliated with NASA.',
