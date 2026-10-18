@@ -421,6 +421,46 @@ test('a tap among several bodies opens a chooser; a tap on one opens its page', 
   await expect(page).toHaveURL(/\/jupiter\/$/);
 });
 
+test('on a phone on its side, a tap on Venus beside the Earth opens Venus, not a chooser', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'touch');
+  // 750×342 on 2027-02-04: Venus 27 px from the Earth, clear of the Moon's ring (it took Venus in
+  // when the ring was drawn as large as it is for a mouse).
+  await page.setViewportSize({ width: 750, height: 342 });
+  await page.goto('?capture&date=2027-02-04');
+  const venus = await at(page, 'venus');
+  await page.touchscreen.tap(venus.x, venus.y);
+  await expect(page).toHaveURL(/\/venus\/$/);
+});
+
+test('with a mouse, the Moon’s ring lies outside the Earth’s link', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'mouse');
+  for (const size of [
+    { width: 1440, height: 900 },
+    { width: 1280, height: 720 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.goto('?capture&date=2026-10-18');
+    // The link that each of 72 points along the ring opens.
+    const hits = await page.evaluate(() => {
+      const ring = document.querySelector<SVGPathElement>('#orrery [data-ref="moon"]')!;
+      const m = ring.getScreenCTM()!;
+      const n = ring.getTotalLength();
+      return Array.from({ length: 72 }, (_, k) => {
+        const p = ring.getPointAtLength((k / 72) * n).matrixTransform(m);
+        return document.elementFromPoint(p.x, p.y)?.closest<HTMLElement>('a[data-body]')?.dataset
+          .body;
+      });
+    });
+    const wh = `${size.width}×${size.height}`;
+    // Venus's link lies over part of it on this date; the rest is the Moon's.
+    expect(hits.filter((b) => b === 'moon').length, wh).toBeGreaterThan(36);
+    expect(hits, wh).not.toContain('earth');
+  }
+});
+
 test('a finger held on a body sees its name clear of the fingertip', async ({
   page,
   isMobile,

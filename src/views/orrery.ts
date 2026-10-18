@@ -275,9 +275,14 @@ export class OrreryView extends View {
     this.ox = (this.w - (x1 - x0) * R) / 2 - x0 * R;
     this.oy = (this.h - (y1 - y0) * R) / 2 + y1 * R;
     for (const p of this.planets) p.r = symbolDiameter(p.m.diameter, R, this.model.dMax) / 2;
-    // The ring lies wholly outside the Earth's link, so every part of it opens the Moon.
+    // The ring's radius is the Earth's symbol's diameter and 6 px. A mouse finds the bodies by their
+    // links, so there the ring also lies wholly outside the Earth's link and every part of it opens
+    // the Moon. A finger takes whatever is within its reach (within()), and a larger ring would only
+    // take in more of the Earth's neighbours.
     const earth = this.planet('earth')?.r ?? 0;
-    this.rho = Math.max(2 * earth + 6, (Math.floor(Math.max(earth + 6, 12)) + 3) / Math.sin(pitch));
+    this.rho = 2 * earth + 6;
+    if (matchMedia('(hover: hover) and (pointer: fine)').matches)
+      this.rho = Math.max(this.rho, (Math.floor(Math.max(earth + 6, 12)) + 3) / Math.sin(pitch));
     // The Moon's link is the ring's ellipse, MOON_LINK px wider all round, under the Earth's.
     const moon = this.links.get('moon');
     if (moon) {
@@ -560,15 +565,17 @@ export class OrreryView extends View {
 
   /**
    * Bodies within reach of a tap at (x, y) px, in NASA's order: a planet within max(r + 8, 22) px of
-   * its centre, the Moon within max(ρ + 4, 22) px of the Earth's.
+   * its centre; the Moon within 22 px of the Earth's, or inside its ring as drawn, 4 px larger.
    */
   within(x: number, y: number): string[] {
-    const near = (p: Planet | undefined, reach: number) =>
-      !!p && Math.hypot(p.at[0] - x, p.at[1] - y) <= reach;
+    const ring = this.moonBox();
     return [...this.links.keys()].filter((id) => {
-      if (id === 'moon') return near(this.planet('earth'), Math.max(this.rho + 4, 22));
-      const p = this.planet(id);
-      return near(p, Math.max((p?.r ?? 0) + 8, 22));
+      const p = this.planet(id === 'moon' ? 'earth' : id);
+      if (!p) return false;
+      const dx = x - p.at[0],
+        dy = y - p.at[1];
+      if (id !== 'moon') return Math.hypot(dx, dy) <= Math.max(p.r + 8, 22);
+      return Math.hypot(dx, dy) <= 22 || (dx / (ring.x1 + 4)) ** 2 + (dy / (ring.y1 + 4)) ** 2 <= 1;
     });
   }
 
