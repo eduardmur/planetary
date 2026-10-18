@@ -200,9 +200,15 @@ const conflict = (d: Discrepancy, i: number, list: Discrepancy[]): string => {
   let end = i + 1;
   while (together(list[end])) end++;
   const src = (s: string) => (s === d.within ? '' : ` (${esc(s)})`);
+  // A value never breaks inside itself; a worked one may break before its result.
+  const whole = (v: string) =>
+    v
+      .split(' = ')
+      .map((s, j) => `<span class="nowrap">${j ? '= ' : ''}${esc(s)}</span>`)
+      .join(' ');
   const pairs = list
     .slice(i, end)
-    .map((e) => `${esc(e.a)}${src(e.aSrc)} vs ${esc(e.b)}${src(e.bSrc)}`);
+    .map((e) => `${whole(e.a)}${src(e.aSrc)} vs ${whole(e.b)}${src(e.bSrc)}`);
   const lead = d.within ? `NASA’s ${esc(d.within)} disagrees with itself` : 'NASA’s pages disagree';
   return `<p class="conflict">${lead} on ${esc(d.what)}: ${pairs.join('; ')}.${d.note ? ` ${esc(d.note)}` : ''}</p>`;
 };
