@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Where NASA's pages disagree with each other. Compares the main table (index.html) with each body's
-// own fact sheet, and checks a few internal relations, then writes data/discrepancies.md.
+// own fact sheet, and checks a few internal relations, then writes data/discrepancies.md and, for the
+// sheets' row popovers, the conflicts alone as src/data/discrepancies.json.
 //
-//   node scripts/ledger.ts            # rewrite data/discrepancies.md
-//   node scripts/ledger.ts --check    # fail if it is out of date (used by the tests)
+//   node scripts/ledger.ts            # rewrite both files
+//   node scripts/ledger.ts --check    # fail if either is out of date (used by CI and the tests)
 //
 // A pair counts as "rounding" when the more precise value, rounded to the other's printed decimals,
 // equals it; anything else is a "conflict". Nothing here changes what the sheets show: every value
@@ -12,12 +13,21 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import raw from '../src/data/factsheet.json' with { type: 'json' };
-import { BODY_IDS, type BodyId, type FactSheet, type Row, type Val } from '../src/data/types.ts';
+import {
+  BODY_IDS,
+  type BodyId,
+  type Discrepancy,
+  type FactSheet,
+  type Row,
+  type Val,
+} from '../src/data/types.ts';
 
 const F = raw as unknown as FactSheet;
 
 interface Entry {
-  body: string;
+  body: BodyId;
+  /** The schedule row the value belongs to: a main-table key (ringSystem for the ring sheets). */
+  key: string;
   what: string;
   a: string;
   aSrc: string;
@@ -58,7 +68,8 @@ function consistent(a: [number, number], b: [number, number], samePrecision: boo
 }
 
 function compare(
-  body: string,
+  body: BodyId,
+  key: string,
   what: string,
   a: Val | undefined,
   aSrc: string,
@@ -77,6 +88,7 @@ function compare(
   const same = decimals(a.text) === decimals(b.text) && scale === 1;
   entries.push({
     body,
+    key,
     what,
     a: a.text + (a.note ?? ''),
     aSrc,
@@ -93,10 +105,10 @@ const row = (id: BodyId, section: 'bulk' | 'orbital', key: string): Row | undefi
 const page = (id: BodyId) => `${id}fact.html`;
 
 for (const id of BODY_IDS) {
-  const name = F.bodies[id].name;
   const p = page(id);
   compare(
-    name,
+    id,
+    'diameter',
     'Diameter vs 2 × equatorial radius (km)',
     main(id, 'diameter'),
     'main table',
@@ -105,7 +117,8 @@ for (const id of BODY_IDS) {
     2,
   );
   compare(
-    name,
+    id,
+    'density',
     'Density (kg/m³)',
     main(id, 'density'),
     'main table',
@@ -113,7 +126,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'gravity',
     'Gravity vs surface acceleration at the equator (m/s²)',
     main(id, 'gravity'),
     'main table',
@@ -121,7 +135,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'escapeVelocity',
     'Escape velocity (km/s)',
     main(id, 'escapeVelocity'),
     'main table',
@@ -129,7 +144,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'rotationPeriod',
     'Rotation period (h)',
     main(id, 'rotationPeriod'),
     'main table',
@@ -137,7 +153,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'dayLength',
     'Length of day (h)',
     main(id, 'dayLength'),
     'main table',
@@ -145,7 +162,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'distanceFromSun',
     'Distance from Sun vs semimajor axis (10⁶ km)',
     main(id, 'distanceFromSun'),
     'main table',
@@ -153,7 +171,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'perihelion',
     'Perihelion (10⁶ km)',
     main(id, 'perihelion'),
     'main table',
@@ -161,7 +180,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'aphelion',
     'Aphelion (10⁶ km)',
     main(id, 'aphelion'),
     'main table',
@@ -171,7 +191,8 @@ for (const id of BODY_IDS) {
   const period =
     id === 'moon' ? 'revolutionPeriod' : id === 'pluto' ? 'siderealPeriod' : 'tropicalPeriod';
   compare(
-    name,
+    id,
+    'orbitalPeriod',
     `Orbital period vs ${period === 'tropicalPeriod' ? 'tropical' : 'sidereal'} period (days)`,
     main(id, 'orbitalPeriod'),
     'main table',
@@ -179,7 +200,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'orbitalVelocity',
     'Orbital velocity vs mean orbital velocity (km/s)',
     main(id, 'orbitalVelocity'),
     'main table',
@@ -187,7 +209,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'orbitalInclination',
     'Orbital inclination (°)',
     main(id, 'orbitalInclination'),
     'main table',
@@ -195,7 +218,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'orbitalEccentricity',
     'Orbital eccentricity',
     main(id, 'orbitalEccentricity'),
     'main table',
@@ -203,7 +227,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'obliquity',
     'Obliquity to orbit (°)',
     main(id, 'obliquity'),
     'main table',
@@ -211,7 +236,8 @@ for (const id of BODY_IDS) {
     p,
   );
   compare(
-    name,
+    id,
+    'moons',
     'Number of moons',
     main(id, 'moons'),
     'main table',
@@ -232,7 +258,8 @@ for (const id of BODY_IDS) {
       c[2] !== undefined ? [Math.min(lo, hi), Math.max(lo, hi)] : interval(c[1]!, lo);
     if (!consistent(interval(mt.text, mt.value), ib, false))
       entries.push({
-        body: name,
+        body: id,
+        key: 'meanTemperature',
         what: `Mean temperature vs "${tRow.label}" (°C)`,
         a: mt.text,
         aSrc: 'main table',
@@ -242,7 +269,8 @@ for (const id of BODY_IDS) {
       });
     else if (mt.value !== lo || c[2] !== undefined)
       entries.push({
-        body: name,
+        body: id,
+        key: 'meanTemperature',
         what: `Mean temperature vs "${tRow.label}" (°C)`,
         a: mt.text,
         aSrc: 'main table',
@@ -265,7 +293,8 @@ for (const id of BODY_IDS) {
       const ic = interval(cText, Number(cText));
       if (!consistent([ik[0] - 273.15, ik[1] - 273.15], ic, false))
         entries.push({
-          body: name,
+          body: id,
+          key: 'meanTemperature',
           what: `"${r.label}": ${k} K printed as ${cText} C`,
           a: r.body.text,
           aSrc: p,
@@ -289,7 +318,8 @@ for (const id of BODY_IDS) {
     const implied = (Qv.value - qv.value) / (Qv.value + qv.value);
     if (!consistent(interval(e.text, e.value), [lo, hi], false))
       entries.push({
-        body: name,
+        body: id,
+        key: 'orbitalEccentricity',
         what: 'Eccentricity vs (Q − q)/(Q + q) from the same table',
         a: e.text,
         aSrc: 'main table',
@@ -313,7 +343,8 @@ for (const id of BODY_IDS) {
       const implied: [number, number] = [ir[0] / ie[1], ir[1] / ie[0]];
       if (!consistent(interval(r.ratio.text.replace(/^[~<>]+/, ''), r.ratio.value), implied, false))
         entries.push({
-          body: name,
+          body: id,
+          key: 'ringSystem',
           what: `Ring "${r.name}": radius/equatorial radius`,
           a: r.ratio.text,
           aSrc: rs.url.split('/').pop()!,
@@ -333,7 +364,7 @@ const table = (list: Entry[]) =>
     .concat(
       list.map(
         (e) =>
-          `| ${e.body} | ${e.what} | ${e.a} (${e.aSrc}) | ${e.b} (${e.bSrc}) | ${e.note ?? ''} |`,
+          `| ${F.bodies[e.body].name} | ${e.what} | ${e.a} (${e.aSrc}) | ${e.b} (${e.bSrc}) | ${e.note ?? ''} |`,
       ),
     )
     .join('\n');
@@ -359,17 +390,39 @@ ${table(conflicts)}
 ${table(rounding)}
 `;
 
-const out = resolve(import.meta.dirname, '../data/discrepancies.md');
+// The conflicts again for the sheets, which show each one in the popover of the row it concerns.
+const json =
+  JSON.stringify(
+    conflicts.map(({ body, key, what, a, aSrc, b, bSrc, note }): Discrepancy => ({
+      body,
+      key,
+      what,
+      a,
+      aSrc,
+      b,
+      bSrc,
+      ...(note ? { note } : {}),
+    })),
+    null,
+    2,
+  ) + '\n';
+
+const files = { 'data/discrepancies.md': md, 'src/data/discrepancies.json': json };
+const path = (f: string) => resolve(import.meta.dirname, '..', f);
 if (process.argv.includes('--check')) {
-  const cur = readFileSync(out, 'utf8');
-  if (cur !== md) {
-    console.error('data/discrepancies.md is out of date: run node scripts/ledger.ts');
-    process.exit(1);
-  }
-  console.log('data/discrepancies.md is up to date');
+  const stale = Object.entries(files).filter(([f, text]) => {
+    try {
+      return readFileSync(path(f), 'utf8') !== text;
+    } catch {
+      return true;
+    }
+  });
+  for (const [f] of stale) console.error(`${f} is out of date: run node scripts/ledger.ts`);
+  if (stale.length) process.exit(1);
+  console.log('data/discrepancies.md and src/data/discrepancies.json are up to date');
 } else {
-  writeFileSync(out, md);
+  for (const [f, text] of Object.entries(files)) writeFileSync(path(f), text);
   console.log(
-    `${conflicts.length} conflicts, ${rounding.length} rounding differences → data/discrepancies.md`,
+    `${conflicts.length} conflicts, ${rounding.length} rounding differences → ${Object.keys(files).join(', ')}`,
   );
 }

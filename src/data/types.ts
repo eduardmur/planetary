@@ -235,6 +235,24 @@ export interface Definitions {
   unkeyed?: Record<string, Definition[]>;
 }
 
+/**
+ * A place where two of NASA's pages print values that cannot be roundings of one number, from
+ * src/data/discrepancies.json (written by scripts/ledger.ts; data/discrepancies.md lists them too).
+ */
+export interface Discrepancy {
+  body: BodyId;
+  /** The schedule row whose popover shows it: a main-table key (ringSystem for the ring sheets). */
+  key: string;
+  /** What is compared, e.g. "Rotation period (h)". */
+  what: string;
+  /** Each value as printed, with the page it comes from, e.g. "-5832.5" from "main table". */
+  a: string;
+  aSrc: string;
+  b: string;
+  bSrc: string;
+  note?: string;
+}
+
 export interface FactSheet {
   /** Base URL of the NASA section. */
   source: string;

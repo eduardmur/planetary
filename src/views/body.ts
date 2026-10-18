@@ -6,6 +6,9 @@
 // comes down to the orbit plane). The axis runs to the positive pole (right-hand rule), and the body
 // turns counter-clockwise about it at |rotation period|: Venus, Uranus and Pluto turn clockwise seen
 // from the north side of their orbits because their positive poles point "down".
+//
+// Some details are drawn only while their row is selected: the polar semi-axis and the core with the
+// diameter, the ring radii with the ring system, the dipole with the magnetic field.
 
 import { Camera, type Orientation } from '../draw/camera.ts';
 import { circle, splitCurve, type Curve } from '../draw/curves.ts';
@@ -49,7 +52,7 @@ import {
   type Vec2,
   type Vec3,
 } from '../draw/vec.ts';
-import { reducedMotion, View } from './view.ts';
+import { View } from './view.ts';
 
 /** One ring edge as drawn: radius in km and NASA's printed strings. */
 export interface RingEdge {
@@ -66,7 +69,7 @@ export interface BodyModel {
   /** Main-table Diameter: the equatorial diameter that sizes the outline. */
   diameter: number;
   diameterText: string;
-  /** Body-page polar radius; dimensioned only where the flattening is visible. */
+  /** Body-page polar radius; dimensioned with the diameter, where the flattening is visible. */
   polar: number;
   polarText: string;
   /** Spherical (NASA flattening 0): dimension as SØ. */
@@ -77,6 +80,7 @@ export interface BodyModel {
   /** Main-table Rotation Period, hours, as printed (negative = retrograde). */
   rotation: number;
   rotationText: string;
+  /** Body-page core radius (Earth, Mars), drawn with the diameter. */
   core?: { r: number; text: string; note?: string };
   rings?: {
     edges: RingEdge[];
@@ -96,8 +100,8 @@ const TRUE_OBLIQUITY: Orientation = { yaw: 0, pitch: 0 };
 /** Spin time scale for the whole set: one second of real time is one hour. */
 export const HOURS_PER_SECOND = 1;
 /** Flattening below this is a pixel at screen scale, so the polar semi-axis is not dimensioned. */
-const VISIBLE_FLATTENING = 0.01;
-/** Below this drawing radius (px), secondary dimensions are left out rather than overprinted. */
+export const VISIBLE_FLATTENING = 0.01;
+/** Below this drawing radius (px) the graphic scale is left out rather than overprinted. */
 const SMALL = 90;
 /** Margin kept between the drawing and the edges of its area, px. */
 const MARGIN = 10;
@@ -132,11 +136,19 @@ export class BodyView extends View {
   /** Keep clear of the key-plan inset; its rectangle in this view's pixels. */
   clearInset = false;
   inset: Box | null = null;
+  /** Where the view was before the obliquity turned it into the orbit plane, to turn back to. */
   private beforeObliquity: Orientation | null = null;
+  /** The reader turned the view while the obliquity was in focus: leave it where they put it. */
+  private keepTurn = false;
 
   constructor(svg: SVGSVGElement, m: BodyModel) {
     super(svg, BODY_HOME, { turntable: true });
     this.m = m;
+    this.onDrag = () => {
+      if (this.focus !== 'obliquity') return;
+      this.beforeObliquity = null;
+      this.keepTurn = true;
+    };
     this.measure();
   }
 
@@ -160,24 +172,21 @@ export class BodyView extends View {
     this.redraw();
   }
 
-  setFocus(key: string | null) {
+  /** Light up a parameter's geometry and draw its details; `instant` turns without animating. */
+  setFocus(key: string | null, { instant = false } = {}) {
     const was = this.focus;
     this.focus = key;
     this.scene.setHot(key);
     // The obliquity is true size only in the orbit plane: go there while it is in focus.
     if (key === 'obliquity' && was !== key) {
       this.beforeObliquity = { yaw: this.camera.yaw, pitch: this.camera.pitch };
-      this.turnTo(TRUE_OBLIQUITY);
+      this.turn(TRUE_OBLIQUITY, { ms: 700, instant });
     } else if (was === 'obliquity' && key !== was) {
-      this.turnTo(this.beforeObliquity ?? BODY_HOME);
+      if (!this.keepTurn) this.turn(this.beforeObliquity ?? BODY_HOME, { ms: 700, instant });
       this.beforeObliquity = null;
+      this.keepTurn = false;
     }
     this.redraw();
-  }
-
-  private turnTo(o: Orientation) {
-    if (reducedMotion()) this.camera.set(o);
-    else this.camera.animateTo(o, performance.now(), 700);
   }
 
   protected extent() {
@@ -378,15 +387,17 @@ export class BodyView extends View {
     labels.line(tracePx);
     labels.line([neg, pos]);
 
-    // Core: a hidden outline, always behind the surface (named last, where there is room).
-    const rc = m.core ? (m.core.r / R) * this.k : 0;
-    if (m.core) {
+    // With the diameter, the core: a hidden outline, always behind the surface (named last, where
+    // there is room).
+    const core = this.focus === 'diameter' ? m.core : undefined;
+    const rc = core ? (core.r / R) * this.k : 0;
+    if (core) {
       const pts: Vec2[] = [];
       for (let i = 0; i <= 120; i++) {
         const t = (i / 120) * 2 * Math.PI;
         pts.push([c0[0] + Math.cos(t) * rc, c0[1] + Math.sin(t) * rc]);
       }
-      dl.polyline(pts, 'hidden-dash', 'coreRadius');
+      dl.polyline(pts, 'hidden-dash', 'diameter coreRadius');
     }
 
     // Obliquity: from the orbit normal to the axis, in their common plane (X–Z), outside the spin
@@ -447,9 +458,9 @@ export class BodyView extends View {
     this.alongText(dl, labels, q1, q2, `${sym}${isoNumber(m.diameterText)}`, 'diameter');
     labels.line([q1, q2]);
 
-    // Polar semi-axis, where the flattening shows: its own dimension parallel to the axis, on the
-    // side away from the orbit normal, from the equator to the pole.
-    if (1 - m.polar / R >= VISIBLE_FLATTENING && !small) {
+    // With the diameter, the polar semi-axis where the flattening shows: its own dimension parallel
+    // to the axis, on the side away from the orbit normal, from the equator to the pole.
+    if (this.focus === 'diameter' && 1 - m.polar / R >= VISIBLE_FLATTENING) {
       const side = norm(scale(sub([0, 0, 1], scale(axis, axis[2])), -1));
       const lat = 1.3;
       const poleW = scale(axis, L.c);
@@ -457,11 +468,12 @@ export class BodyView extends View {
       const polePx = this.px(poleW);
       const a1 = this.px(scale(side, lat));
       const a2 = this.px(add(poleW, scale(side, lat)));
-      dl.line(eqPx, this.px(scale(side, lat + 0.06)), 'dim', 'polarRadius');
-      dl.line(polePx, this.px(add(poleW, scale(side, lat + 0.06))), 'dim', 'polarRadius');
-      pathDim(dl, [a1, a2], 'polarRadius', 'both');
+      const ref = 'diameter polarRadius';
+      dl.line(eqPx, this.px(scale(side, lat + 0.06)), 'dim', ref);
+      dl.line(polePx, this.px(add(poleW, scale(side, lat + 0.06))), 'dim', ref);
+      pathDim(dl, [a1, a2], ref, 'both');
       labels.line([a1, a2]);
-      this.alongText(dl, labels, a1, a2, isoNumber(m.polarText), 'polarRadius');
+      this.alongText(dl, labels, a1, a2, isoNumber(m.polarText), ref);
     }
 
     // Labels: the obliquity value, the positive pole and the rotation period.
@@ -496,8 +508,9 @@ export class BodyView extends View {
 
     // The core's leader: the first direction whose label fits and whose leader crosses no line
     // outside the outline.
-    if (m.core) {
-      const text = `CORE R${isoNumber(m.core.text)}${m.core.note ?? ''}`;
+    if (core) {
+      const ref = 'diameter coreRadius';
+      const text = `CORE R${isoNumber(core.text)}${core.note ?? ''}`;
       // Every obstacle but the first, the outline's bounding box, which the leader has to cross.
       const clear = (p: Vec2) =>
         labels.obstacles.every(
@@ -528,14 +541,14 @@ export class BodyView extends View {
         if (!best || cost < best.cost - 1e-6) best = { cost, leader: [at, knee, end], end, spot };
         if (cost === 0) break;
       }
-      dl.polyline(best!.leader, 'dim', 'coreRadius');
-      dl.dot(best!.leader[0]!, 1.6, 'coreRadius');
+      dl.polyline(best!.leader, 'dim', ref);
+      dl.dot(best!.leader[0]!, 1.6, ref);
       labels.line(best!.leader.slice(1));
       labels.place(dl, {
         x: best!.end[0],
         y: best!.end[1],
         text,
-        ref: 'coreRadius',
+        ref,
         spots: [best!.spot],
         gap: 4,
       });
@@ -543,8 +556,7 @@ export class BodyView extends View {
 
     // On demand: ring radii and the magnetic dipole.
     if (m.rings && this.focus === 'ringSystem') this.ringDims(dl, labels, e1, e2, R);
-    if (m.dipole && (this.focus === 'magneticField' || this.focus === 'dipoleTilt'))
-      this.dipole(dl, labels, axis);
+    if (m.dipole && this.focus === 'magneticField') this.dipole(dl, labels, axis);
 
     // Graphic scale, lower left, in km.
     if (!small) {
@@ -594,18 +606,39 @@ export class BodyView extends View {
     const cam = this.camera;
     const edges = [...this.m.rings!.edges].sort((x, y) => x.r - y.r);
     const o = this.px([0, 0, 0]);
-    const name = (e: { name: string }) =>
-      /^\d/.test(e.name) ? `RING ${e.name}` : e.name.toUpperCase();
+    // Radius and name; a small drawing letters the radius alone (the popover names each edge).
+    const text = (e: RingEdge) => {
+      const r = isoNumber(e.text);
+      if (this.k < SMALL) return r;
+      return `${r} ${/^\d/.test(e.name) ? `RING ${e.name}` : e.name.toUpperCase()}`;
+    };
     type Plan = {
       dir: Vec3;
       tips: Vec2[];
       boxes: Box[];
       cost: number;
       leftSide: boolean;
-      down: boolean;
+    };
+    /** Area of the boxes outside the view or over the key-plan inset. */
+    const badness = (boxes: Box[]) => {
+      let cost = 0;
+      for (const bx of boxes) {
+        const area = (bx.x1 - bx.x0) * (bx.y1 - bx.y0);
+        const kept =
+          Math.max(0, Math.min(bx.x1, this.w - 4) - Math.max(bx.x0, 4)) *
+          Math.max(0, Math.min(bx.y1, this.h - 4) - Math.max(bx.y0, 4));
+        cost += (area - kept) * 10;
+        if (this.clearInset && this.inset) {
+          const ix =
+            Math.max(0, Math.min(bx.x1, this.inset.x1) - Math.max(bx.x0, this.inset.x0)) *
+            Math.max(0, Math.min(bx.y1, this.inset.y1) - Math.max(bx.y0, this.inset.y0));
+          cost += ix * 10;
+        }
+      }
+      return cost;
     };
     const plans: Plan[] = [];
-    for (const [sx, sy] of [
+    search: for (const [sx, sy] of [
       [1, -0.6],
       [1, 0.6],
       [-1, -0.6],
@@ -621,34 +654,42 @@ export class BodyView extends View {
       const dir = norm([e1[0] * a + e2[0] * b, e1[1] * a + e2[1] * b, e1[2] * a + e2[2] * b]);
       const tips = edges.map((e) => this.px(scale(dir, e.r / R)));
       const leftSide = sx < 0;
-      const down = sy < 0;
-      const boxes: Box[] = [];
-      let last = down ? -Infinity : Infinity;
-      for (let i = 0; i < edges.length; i++) {
-        const p = tips[i]!;
-        const t = `${isoNumber(edges[i]!.text)} ${name(edges[i]!)}`;
-        const { w, h } = textBox(t, 's');
-        const y = down ? Math.max(p[1] + 10, last + h + 1) : Math.min(p[1] - 10, last - h - 1);
-        last = y;
-        const x0 = leftSide ? p[0] - 9 - w : p[0] + 9;
-        boxes.push({ x0, y0: y - h / 2, x1: x0 + w, y1: y + h / 2 });
-      }
-      let cost = 0;
-      for (const bx of boxes) {
-        const area = (bx.x1 - bx.x0) * (bx.y1 - bx.y0);
-        const kept =
-          Math.max(0, Math.min(bx.x1, this.w - 4) - Math.max(bx.x0, 4)) *
-          Math.max(0, Math.min(bx.y1, this.h - 4) - Math.max(bx.y0, 4));
-        cost += (area - kept) * 10;
-        if (this.clearInset && this.inset) {
-          const ix =
-            Math.max(0, Math.min(bx.x1, this.inset.x1) - Math.max(bx.x0, this.inset.x0)) *
-            Math.max(0, Math.min(bx.y1, this.inset.y1) - Math.max(bx.y0, this.inset.y0));
-          cost += ix * 10;
+      // Each value beside its tip, stacked over the tips (or under them) in their own order down
+      // the page, so that no leader crosses another value.
+      for (const above of sy > 0 ? [true, false] : [false, true]) {
+        const order = tips
+          .map((_, i) => i)
+          .sort((i, j) => (tips[j]![1] - tips[i]![1]) * (above ? 1 : -1));
+        const boxes: Box[] = [];
+        let last = above ? Infinity : -Infinity;
+        for (const i of order) {
+          const p = tips[i]!;
+          const { w, h } = textBox(text(edges[i]!), 's');
+          const y = above ? Math.min(p[1] - 10, last - h - 1) : Math.max(p[1] + 10, last + h + 1);
+          last = y;
+          const x0 = leftSide ? p[0] - 9 - w : p[0] + 9;
+          boxes[i] = { x0, y0: y - h / 2, x1: x0 + w, y1: y + h / 2 };
         }
+        // The stack moves as one: sideways into the view and, over its tips, up clear of the key
+        // plan under it or the view's bottom edge.
+        const x0 = Math.min(...boxes.map((bx) => bx.x0)),
+          x1 = Math.max(...boxes.map((bx) => bx.x1));
+        const slide = x0 < 4 ? 4 - x0 : Math.min(0, this.w - 4 - x1);
+        const under =
+          this.clearInset && this.inset && x1 + slide > this.inset.x0 && x0 + slide < this.inset.x1
+            ? this.inset.y0 - 3
+            : this.h - 4;
+        const rise = above ? Math.max(0, Math.max(...boxes.map((bx) => bx.y1)) - under) : 0;
+        for (const bx of boxes) {
+          bx.x0 += slide;
+          bx.x1 += slide;
+          bx.y0 -= rise;
+          bx.y1 -= rise;
+        }
+        const cost = badness(boxes);
+        plans.push({ dir, tips, boxes, cost, leftSide });
+        if (cost === 0) break search;
       }
-      plans.push({ dir, tips, boxes, cost, leftSide, down });
-      if (cost === 0) break;
     }
     const best = plans.reduce((x, y) => (y.cost < x.cost ? y : x));
     const far = best.tips[best.tips.length - 1]!;
@@ -660,7 +701,7 @@ export class BodyView extends View {
       const y = (bx.y0 + bx.y1) / 2;
       const knee: Vec2 = [best.leftSide ? bx.x1 + 3 : bx.x0 - 3, y];
       dl.line(p, knee, 'dim', 'ringSystem');
-      letter(dl, `${isoNumber(edges[i]!.text)} ${name(edges[i]!)}`, bx.x0, y, {
+      letter(dl, text(edges[i]!), bx.x0, y, {
         size: 's',
         valign: 'middle',
         ref: 'ringSystem',

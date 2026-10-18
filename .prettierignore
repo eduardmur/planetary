@@ -7,6 +7,7 @@ test-results
 playwright-report
 data/raw
 data/discrepancies.md
+src/data/discrepancies.json
 public/og
 docs/media
 public/404.html

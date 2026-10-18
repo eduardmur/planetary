@@ -3,8 +3,11 @@
 // 10⁶ km) and the main-table inclination; its orientation (Ω, ϖ) and the position at the epoch come
 // from NASA's mean orbital elements (J2000) and Kepler's equation.
 //
-// Pointing at the inclination turns the plan edge-on along the line of nodes, where the angle between
-// the orbit and the ecliptic is true size.
+// By default the plan shows the orbit, Earth's orbit, the Sun, ♈ and the position on the date. The
+// rest comes with its row: the apsides and their dimensions with the perihelion, aphelion, distance
+// and eccentricity; the line of nodes with the inclination, which also turns the plan edge-on along
+// it, where the angle between the orbit and the ecliptic is true size; equal-time ticks with the
+// orbital period.
 
 import { orbitPointAtTrueAnomaly, trueAnomalyAt, type MeanElements } from '../astro/index.ts';
 import type { Orientation } from '../draw/camera.ts';
@@ -23,7 +26,7 @@ import { LabelPlacer, bbox, spotsToward, type LabelReq, type Spot } from '../dra
 import { CAP, isoNumber, letter } from '../draw/lettering.ts';
 import type { DrawList } from '../draw/svg.ts';
 import { DEG, cross, dot, norm, scale, sub, type Vec2, type Vec3 } from '../draw/vec.ts';
-import { reducedMotion, View } from './view.ts';
+import { View } from './view.ts';
 
 export interface OrbitShape {
   /** Main-table perihelion and aphelion (10⁶ km), numbers and printed strings. */
@@ -97,14 +100,13 @@ export class KeyPlanView extends View {
     return { radius: reach * 1.12, fill: 0.86 };
   }
 
-  setFocus(key: string | null) {
+  /** Light up a parameter's geometry and draw its details; `instant` turns without animating. */
+  setFocus(key: string | null, { instant = false } = {}) {
     const was = this.focus;
     this.focus = key;
     this.scene.setHot(key);
-    const turn = (o: Orientation) =>
-      reducedMotion() ? this.camera.set(o) : this.camera.animateTo(o, performance.now(), 900);
-    if (key === 'orbitalInclination' && was !== key) turn(this.edgeView());
-    if (was === 'orbitalInclination' && key !== was) turn(TRUE_SHAPE);
+    if (key === 'orbitalInclination' && was !== key) this.turn(this.edgeView(), { instant });
+    if (was === 'orbitalInclination' && key !== was) this.turn(TRUE_SHAPE, { instant });
     this.redraw();
   }
 
@@ -195,86 +197,89 @@ export class KeyPlanView extends View {
       gap: 9,
     });
 
-    // Apsides: perihelion and aphelion points and the line between them through the focus.
+    // Apsides, with the rows that measure along them: the line through the focus, then each row's
+    // own points and dimensions. q, Q and (a) take the roomier side of the line.
+    const f = this.focus;
     const peri = orbitPointAtTrueAnomaly(el, 0);
     const apo = orbitPointAtTrueAnomaly(el, 180);
     const pPx = P(peri),
       aPx = P(apo);
     const cPx = P(scale(sub(peri, apo), 0).map((_, i) => (peri[i]! + apo[i]!) / 2) as Vec3);
-    if (!edge) {
+    const along =
+      f === 'perihelion' ||
+      f === 'aphelion' ||
+      f === 'distanceFromSun' ||
+      f === 'orbitalEccentricity';
+    if (along && !edge) {
       dl.line(aPx, pPx, 'center', 'perihelion aphelion');
       labels.line([aPx, pPx]);
-      dl.dot(pPx, 2.2, 'perihelion');
-      dl.dot(aPx, 2.2, 'aphelion');
-      centreMark(dl, cPx, 4, 'orbitalEccentricity');
-
-      // q and Q as a chain from the focus, on the roomier side; a as a reference dimension.
       const dir = unit2(sub2(pPx, aPx));
       const n: Vec2 = [-dir[1], dir[0]];
       const midBox: Vec2 = [(orbitBox.x0 + orbitBox.x1) / 2, (orbitBox.y0 + orbitBox.y1) / 2];
       const side = (midBox[0] - cPx[0]) * n[0] + (midBox[1] - cPx[1]) * n[1] > 0 ? -1 : 1;
       const off = 16 * side;
-      linearDim(dl, sun, pPx, off, 'perihelion');
-      linearDim(dl, aPx, sun, off, 'aphelion');
       const sh = (p: Vec2, d: number): Vec2 => [p[0] + n[0] * d, p[1] + n[1] * d];
-      labels.line([sh(aPx, off), sh(pPx, off)]);
-      labels.line([sun, sh(sun, off)]);
-      labels.line([pPx, sh(pPx, off)]);
-      labels.line([aPx, sh(aPx, off)]);
-      const along = (p: Vec2, q: Vec2): Vec2 => [
-        (p[0] + q[0]) / 2 + n[0] * off,
-        (p[1] + q[1]) / 2 + n[1] * off,
-      ];
-      labels.block(
-        bbox(dimText(dl, along(sun, pPx), dir, isoNumber(m.orbit.qText), 'perihelion', 's'), 1),
-      );
-      labels.block(
-        bbox(dimText(dl, along(aPx, sun), dir, isoNumber(m.orbit.QText), 'aphelion', 's'), 1),
-      );
-      const off2 = -off * 1.9;
-      linearDim(dl, cPx, pPx, off2, 'distanceFromSun');
-      labels.line([sh(cPx, off2), sh(pPx, off2)]);
-      labels.line([cPx, sh(cPx, off2)]);
-      const at: Vec2 = [(cPx[0] + pPx[0]) / 2 + n[0] * off2, (cPx[1] + pPx[1]) / 2 + n[1] * off2];
-      labels.block(
-        bbox(dimText(dl, at, dir, `(${isoNumber(m.orbit.aText)})`, 'distanceFromSun', 's'), 1),
-      );
-      later.push({
-        x: cPx[0],
-        y: cPx[1],
-        text: `e ${m.orbit.eText}`,
-        size: 's',
-        ref: 'orbitalEccentricity',
-        spots: spotsToward(-n[0] * side, -n[1] * side),
-        gap: 8,
-      });
-      later.push({
-        x: pPx[0],
-        y: pPx[1],
-        text: m.apsides[0],
-        size: 's',
-        ref: 'perihelion',
-        spots: spotsToward(pPx[0] - sun[0], pPx[1] - sun[1]),
-      });
-      later.push({
-        x: aPx[0],
-        y: aPx[1],
-        text: m.apsides[1],
-        size: 's',
-        ref: 'aphelion',
-        spots: spotsToward(aPx[0] - sun[0], aPx[1] - sun[1]),
-      });
+      /** A dimension from p to q on the roomier side, its value lettered along it. */
+      const dim = (p: Vec2, q: Vec2, text: string, ref: string) => {
+        linearDim(dl, p, q, off, ref);
+        labels.line([sh(p, off), sh(q, off)]);
+        labels.line([p, sh(p, off)]);
+        labels.line([q, sh(q, off)]);
+        const mid: Vec2 = [(p[0] + q[0]) / 2 + n[0] * off, (p[1] + q[1]) / 2 + n[1] * off];
+        labels.block(bbox(dimText(dl, mid, dir, text, ref, 's'), 1));
+      };
+      /** An apsis: its point, and its name beyond it, away from the Sun. */
+      const apsis = (at: Vec2, ref: string, name?: string) => {
+        dl.dot(at, 2.2, ref);
+        if (name)
+          later.push({
+            x: at[0],
+            y: at[1],
+            text: name,
+            size: 's',
+            ref,
+            spots: spotsToward(at[0] - sun[0], at[1] - sun[1]),
+          });
+      };
+      if (f === 'perihelion') {
+        apsis(pPx, 'perihelion', m.apsides[0]);
+        dim(sun, pPx, isoNumber(m.orbit.qText), 'perihelion');
+      } else if (f === 'aphelion') {
+        apsis(aPx, 'aphelion', m.apsides[1]);
+        dim(aPx, sun, isoNumber(m.orbit.QText), 'aphelion');
+      } else if (f === 'distanceFromSun') {
+        dim(cPx, pPx, `(${isoNumber(m.orbit.aText)})`, 'distanceFromSun');
+      } else {
+        apsis(pPx, 'perihelion');
+        apsis(aPx, 'aphelion');
+        centreMark(dl, cPx, 4, 'orbitalEccentricity');
+        later.push({
+          x: cPx[0],
+          y: cPx[1],
+          text: `e ${m.orbit.eText}`,
+          size: 's',
+          ref: 'orbitalEccentricity',
+          spots: spotsToward(-n[0] * side, -n[1] * side),
+          gap: 8,
+        });
+      }
     }
 
-    // Ascending node on the orbit, and the line of nodes through the focus.
-    if (m.orbit.node !== undefined && m.orbit.peri !== undefined && m.orbit.i > 0) {
+    // With the inclination: the line of nodes through the focus and the ascending node, named while
+    // the plan still looks down on it (it turns edge-on along this line).
+    if (
+      f === 'orbitalInclination' &&
+      m.orbit.node !== undefined &&
+      m.orbit.peri !== undefined &&
+      m.orbit.i > 0
+    ) {
       const nu = m.orbit.node - m.orbit.peri; // ω + ν = 0 at the ascending node
       const asc = P(orbitPointAtTrueAnomaly(el, nu));
       const desc = P(orbitPointAtTrueAnomaly(el, nu + 180));
       dl.line(desc, asc, 'phantom', 'orbitalInclination');
       labels.line([desc, asc]);
       dl.dot(asc, 2, 'orbitalInclination');
-      if (!edge)
+      if (this.camera.pitch >= 60 * DEG)
         later.push({
           x: asc[0],
           y: asc[1],
