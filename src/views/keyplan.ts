@@ -19,16 +19,18 @@ import {
   niceLength,
   pathDim,
   scaleBar,
+  segDist,
+  segSegDist,
   sub2,
   unit2,
 } from '../draw/dims.ts';
 import {
   LabelPlacer,
+  MASK,
   bbox,
   spotsToward,
   spreadAlong,
   textBox,
-  type Box,
   type LabelReq,
   type Spot,
 } from '../draw/labels.ts';
@@ -157,7 +159,10 @@ export class KeyPlanView extends View {
     const el = drawnElements(m.orbit);
     const P = (p: Vec3) => this.px(this.toPlan(p));
     const sun = P([0, 0, 0]);
-    const labels = new LabelPlacer({ x0: 4, y0: 4, x1: this.w - 4, y1: this.h - 4 });
+    /** The radius of the centre body's disc, px. */
+    const rs = 5;
+    const bounds = { x0: 4, y0: 4, x1: this.w - 4, y1: this.h - 4 };
+    const labels = new LabelPlacer(bounds);
     // Labels are placed last, once every drawn line and mark is registered as an obstacle. Labels
     // mind the apsides and the dimension lines twice as much as other lines, and Earth's orbit, a
     // mere reference, a quarter as much.
@@ -189,6 +194,62 @@ export class KeyPlanView extends View {
         hard: true,
       });
 
+    // Position at the epoch on the drawn ellipse, and the direction of motion. They come first, so
+    // that no value lettered before the date keeps its mask over them.
+    let date: LabelReq | null = null;
+    let pos: { pp: Vec2; tip: Vec2 } | null = null;
+    if (m.j2000) {
+      const nu = trueAnomalyAt(m.j2000, this.epoch);
+      const p = orbitPointAtTrueAnomaly(el, nu);
+      const ahead = orbitPointAtTrueAnomaly(el, nu + 2);
+      const pp = P(p);
+      const tangent = unit2(sub2(P(ahead), pp));
+      const tip: Vec2 = [pp[0] + tangent[0] * 26, pp[1] + tangent[1] * 26];
+      dl.dot(pp, 3.4, 'orbitalVelocity');
+      dl.line(pp, tip, 'dim', 'orbitalVelocity');
+      arrowhead(dl, tip, tangent, 'orbitalVelocity');
+      // Labels mind the position and its arrow most: they are what the date is about.
+      labels.line([pp, tip], 2.5, 6, 2);
+      arrowOff(tip, tangent);
+      markOff(pp, 4, 4);
+      pos = { pp, tip };
+      date = {
+        x: pp[0],
+        y: pp[1],
+        text: this.epoch.toISOString().slice(0, 10),
+        size: 's',
+        ref: 'orbitalVelocity',
+        // Edge-on, the labels above the line are taken by the Sun, ♈ and the angle. Where the lines
+        // and labels crowd the dot, the date may stand further off, on a leader; by the edge of the
+        // drawing, over or under the dot, off-centre.
+        spots: edge
+          ? ['bl', 'br', 'b', 'tl', 'tr', 't', 'l', 'r']
+          : spotsToward(pp[0] - sun[0], pp[1] - sun[1]),
+        gap: 7,
+        reach: [2, 3, 4, 5],
+        mask: true,
+        slide: true,
+      };
+
+      // Equal-time ticks (1/24 of the sidereal period each), on demand: Kepler's second law.
+      if (this.focus === 'orbitalPeriod') {
+        for (let k = 0; k < 24; k++) {
+          const when = new Date(this.epoch.getTime() + ((k * m.j2000.period) / 24) * 86_400_000);
+          const t = orbitPointAtTrueAnomaly(el, trueAnomalyAt(m.j2000, when));
+          const tt = orbitPointAtTrueAnomaly(el, trueAnomalyAt(m.j2000, when) + 1);
+          const a = P(t),
+            dir = unit2(sub2(P(tt), a));
+          const nn: Vec2 = [-dir[1] * 5, dir[0] * 5];
+          const ends: [Vec2, Vec2] = [
+            [a[0] - nn[0], a[1] - nn[1]],
+            [a[0] + nn[0], a[1] + nn[1]],
+          ];
+          dl.line(ends[0], ends[1], 'dim', 'orbitalPeriod');
+          labels.line(ends, 1.5, 3);
+        }
+      }
+    }
+
     // Reference: Earth's orbit (phantom; no row of its own, so not a target) and the ecliptic datum ♈
     // from the Sun.
     let rEarth = 0;
@@ -201,19 +262,49 @@ export class KeyPlanView extends View {
       for (const q of pts) rEarth = Math.max(rEarth, Math.hypot(q[0] - sun[0], q[1] - sun[1]));
     }
     if (m.orbit.node !== undefined) {
-      const tip = P([el.a * (1 + el.e) * 1.08, 0, 0]);
+      // Beyond the orbit; where its arrowhead would meet the position or its arrow, further out, as
+      // far as leaves room for ♈ in the drawing, else shorter, as far as leaves it clear of the Sun.
+      const far = P([el.a * (1 + el.e) * 1.08, 0, 0]);
+      const d = unit2(sub2(far, sun));
+      const clear = (t: Vec2) => {
+        if (!pos) return true;
+        const base: Vec2 = [t[0] - d[0] * ARROW.len, t[1] - d[1] * ARROW.len];
+        return (
+          segDist(pos.pp, base, t) > 3.4 + ARROW.half + 1.5 &&
+          segSegDist(base, t, pos.pp, pos.tip) > 2 * ARROW.half + 1
+        );
+      };
+      const along = (k: number): Vec2 => [far[0] + d[0] * k, far[1] + d[1] * k];
+      const room = (t: Vec2) =>
+        t[0] >= 10 && t[1] >= 10 && t[0] <= this.w - 10 && t[1] <= this.h - 10;
+      let tip = far;
+      let short = false;
+      if (!clear(far)) {
+        let k = 1;
+        while (room(along(k)) && !clear(along(k))) k++;
+        if (room(along(k))) tip = along(k);
+        else {
+          const len = Math.hypot(far[0] - sun[0], far[1] - sun[1]);
+          for (k = 1; len - k >= rs + ARROW.len + 4; k++)
+            if (clear(along(-k))) {
+              tip = along(-k);
+              short = true;
+              break;
+            }
+        }
+      }
       dl.line(sun, tip, 'center', '');
-      arrowhead(dl, tip, sub2(tip, sun));
+      arrowhead(dl, tip, d);
       labels.line([sun, tip]);
-      arrowOff(tip, sub2(tip, sun));
-      // Beyond the arrowhead, whichever way it points; edge-on, where the arrow lies along the
-      // orbit, also beside it.
-      const beyond = spotsToward(tip[0] - sun[0], tip[1] - sun[1]);
+      arrowOff(tip, d);
+      // Beyond the arrowhead, whichever way it points, else beside it; edge-on, where the arrow lies
+      // along the orbit, or where the position stands beyond it, anywhere round it.
+      const beyond = spotsToward(d[0], d[1]);
       later.push({
         x: tip[0],
         y: tip[1],
         text: '♈',
-        spots: edge ? beyond : beyond.slice(0, 3),
+        spots: edge || short ? beyond : beyond.slice(0, 5),
         gap: 5,
         mask: true,
       });
@@ -229,7 +320,6 @@ export class KeyPlanView extends View {
 
     // The centre body at the focus, drawn as matter (wide). Labels keep off the disc itself, which is
     // round, so that SUN's corner spots stay open.
-    const rs = 5;
     const disc: Vec2[] = [];
     for (let k = 0; k <= 40; k++)
       disc.push([
@@ -275,8 +365,9 @@ export class KeyPlanView extends View {
       const sh = (p: Vec2, d: number): Vec2 => [p[0] + n[0] * d, p[1] + n[1] * d];
       /**
        * A dimension from p to q, 16 px off the apsides on the roomier side (or on the other, where
-       * only that one leaves its value clear), its value along it where nothing crosses it: between
-       * the arrowheads, or beyond them on an extension of the line when the dimension is short.
+       * only that one leaves its value clear, or a fit place: see LabelPlacer.along()), its value
+       * along it where nothing crosses it: between the arrowheads, or beyond them on an extension of
+       * the line when the dimension is short.
        */
       const dim = (p: Vec2, q: Vec2, text: string, ref: string) => {
         const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
@@ -285,10 +376,12 @@ export class KeyPlanView extends View {
         // linearDim() puts the arrowheads outside, on a longer line, when they do not fit inside.
         const out = len > 2 * ARROW.len + 4 ? 0 : ARROW.len + 8;
         const beyond = out + 4 + w / 2;
-        const inside = w + 2 * ARROW.len + 8 <= len;
-        const at = inside
-          ? spreadAlong(p, q, text, ARROW.len + 3, 's')
-          : [1 + beyond / len, -beyond / len];
+        const ends = [1 + beyond / len, -beyond / len];
+        // Between the arrowheads where it fits there and has a fit place, else beyond them.
+        const tries =
+          w + 2 * ARROW.len + 8 <= len
+            ? [spreadAlong(p, q, text, ARROW.len + 3, 's'), ends]
+            : [ends];
         /** Extension lines and arrowheads at one offset, as obstacles; the dimension line's ends. */
         const register = (off: number): [Vec2, Vec2] => {
           const a = sh(p, off),
@@ -301,16 +394,20 @@ export class KeyPlanView extends View {
           arrowOff(b, out ? back : d);
           return [a, b];
         };
-        let best: { off: number; cost: number } | null = null;
-        for (const off of [16 * side, -16 * side]) {
-          const before = labels.mark();
-          const [a, b] = register(off);
-          const { cost } = labels.along(a, b, text, { size: 's', at });
-          labels.drop(before);
-          if (!best || cost < best.cost - 1e-6) best = { off, cost };
-          if (cost === 0) break;
+        let best: { off: number; at: number[]; cost: number; bad: boolean } | null = null;
+        for (const at of tries) {
+          for (const off of [16 * side, -16 * side]) {
+            const before = labels.mark();
+            const [a, b] = register(off);
+            const { cost, bad } = labels.along(a, b, text, { size: 's', at });
+            labels.drop(before);
+            if (!best || (best.bad && !bad) || (best.bad === bad && cost < best.cost - 1e-6))
+              best = { off, at, cost, bad };
+            if (cost === 0) break;
+          }
+          if (!best!.bad) break;
         }
-        const off = best!.off;
+        const { off, at } = best!;
         linearDim(dl, p, q, off, ref);
         const [a, b] = register(off);
         const v = labels.placeAlong(dl, a, b, text, { ref, size: 's', at });
@@ -319,7 +416,7 @@ export class KeyPlanView extends View {
           [a[0] - d[0] * out, a[1] - d[1] * out],
           [b[0] + d[0] * out, b[1] + d[1] * out],
         ];
-        if (!inside) {
+        if (at === ends) {
           const vc: Vec2 = [(v.x0 + v.x1) / 2, (v.y0 + v.y1) / 2];
           const t = (vc[0] - a[0]) * d[0] + (vc[1] - a[1]) * d[1];
           const reach = w / 2 + 2;
@@ -345,8 +442,9 @@ export class KeyPlanView extends View {
             size: 's',
             ref,
             spots: spotsToward(at[0] - sun[0], at[1] - sun[1]),
-            reach: [2, 3],
+            reach: [2, 3, 4, 5],
             mask: true,
+            slide: true,
           });
       };
       if (f === 'perihelion') {
@@ -483,7 +581,7 @@ export class KeyPlanView extends View {
         spots: ['r', 'tr', 'br', 't', 'b'],
         mask: true,
       });
-      // At whichever end of the ecliptic line is free.
+      // At whichever end of the ecliptic line is free, under it, over it or beyond it.
       later.push(
         ([1, -1] as const).map((end) => ({
           x: ecl[end > 0 ? 1 : 0][0],
@@ -491,108 +589,91 @@ export class KeyPlanView extends View {
           text: 'ECLIPTIC',
           size: 's' as const,
           ref: 'orbitalInclination',
-          spots: ['b', end > 0 ? 'br' : 'bl', end > 0 ? 'bl' : 'br', 't'] as Spot[],
+          spots: [
+            'b',
+            end > 0 ? 'br' : 'bl',
+            end > 0 ? 'bl' : 'br',
+            't',
+            end > 0 ? 'r' : 'l',
+          ] as Spot[],
+          reach: [2, 3],
           mask: true,
         })),
       );
     }
 
-    // Position at the epoch on the drawn ellipse, and the direction of motion.
-    let date: LabelReq | null = null;
-    if (m.j2000) {
-      const nu = trueAnomalyAt(m.j2000, this.epoch);
-      const p = orbitPointAtTrueAnomaly(el, nu);
-      const ahead = orbitPointAtTrueAnomaly(el, nu + 2);
-      const pp = P(p);
-      const tangent = unit2(sub2(P(ahead), pp));
-      const tip: Vec2 = [pp[0] + tangent[0] * 26, pp[1] + tangent[1] * 26];
-      dl.dot(pp, 3.4, 'orbitalVelocity');
-      dl.line(pp, tip, 'dim', 'orbitalVelocity');
-      arrowhead(dl, tip, tangent, 'orbitalVelocity');
-      // Labels mind the position and its arrow most: they are what the date is about.
-      labels.line([pp, tip], 2.5, 6, 2);
-      arrowOff(tip, tangent);
-      markOff(pp, 4, 4);
-      date = {
-        x: pp[0],
-        y: pp[1],
-        text: this.epoch.toISOString().slice(0, 10),
-        size: 's',
-        ref: 'orbitalVelocity',
-        // Edge-on, the labels above the line are taken by the Sun, ♈ and the angle, and the lines
-        // crowd the dot: the date may stand further off, on a leader.
-        spots: edge
-          ? ['bl', 'br', 'b', 'tl', 'tr', 't', 'l', 'r']
-          : spotsToward(pp[0] - sun[0], pp[1] - sun[1]),
-        gap: 7,
-        ...(edge ? { reach: [2, 3] } : {}),
-        mask: true,
+    // Scale bar, in 10⁶ km: bottom left, else in the first corner where it stands clear of the marks
+    // and labels drawn so far, of the position's arrow and of both apsides, drawn or not (so that it
+    // keeps its corner whichever row is open); else of this state's alone. Where no corner is clear,
+    // its length goes under the bar, to take less room. Its lettering interrupts the lines under it
+    // (an orbit, a period tick, a dimension line).
+    if (!edge) {
+      const L = niceLength((this.w * 0.22) / this.k);
+      const len = L * this.k;
+      const text = `${isoNumber(String(L))} ×10⁶ km`;
+      const tw = textBox(text, 's').w;
+      /** The bar in one corner: its left end, where its length is lettered (beside the bar, or
+       *  under it), and all it takes, its '0' over its left end included. */
+      const bar = (right: boolean, top: boolean, under: boolean) => {
+        const w = under ? Math.max(len, tw) + 4 : len + 8 + tw;
+        const x = right ? this.w - 10 - w : 12;
+        const y = top ? 23 : this.h - (under ? 25 : 16);
+        const at: Vec2 = under ? [x, y + 15] : [x + len + 6, y + 4];
+        return {
+          x,
+          y,
+          at,
+          box: { x0: x - 2, y0: y - 14, x1: x - 2 + w, y1: y + (under ? 17 : 7) },
+        };
       };
-
-      // Equal-time ticks (1/24 of the sidereal period each), on demand: Kepler's second law.
-      if (this.focus === 'orbitalPeriod') {
-        for (let k = 0; k < 24; k++) {
-          const when = new Date(this.epoch.getTime() + ((k * m.j2000.period) / 24) * 86_400_000);
-          const t = orbitPointAtTrueAnomaly(el, trueAnomalyAt(m.j2000, when));
-          const tt = orbitPointAtTrueAnomaly(el, trueAnomalyAt(m.j2000, when) + 1);
-          const a = P(t),
-            dir = unit2(sub2(P(tt), a));
-          const nn: Vec2 = [-dir[1] * 5, dir[0] * 5];
-          const ends: [Vec2, Vec2] = [
-            [a[0] - nn[0], a[1] - nn[1]],
-            [a[0] + nn[0], a[1] + nn[1]],
-          ];
-          dl.line(ends[0], ends[1], 'dim', 'orbitalPeriod');
-          labels.line(ends, 1.5, 3);
-        }
+      const bars = [false, true].flatMap((under) =>
+        [false, true].flatMap((top) => [false, true].map((right) => bar(right, top, under))),
+      );
+      const keep = new LabelPlacer(
+        bounds,
+        labels.obstacles.filter((o) => o.hard),
+      );
+      for (const p of labels.placed) keep.block(p);
+      if (pos) keep.line([pos.pp, pos.tip], 3);
+      // The apsides' dots, with room for the paper round the bar's lettering.
+      const apsides = new LabelPlacer(bounds, [bbox([pPx], 6), bbox([aPx], 6)]);
+      const clear = bars.filter((b) => keep.free(b.box));
+      const { x, y, at, box } =
+        clear.find((b) => apsides.onInk(b.box) === 0) ?? clear[0] ?? bars[0]!;
+      scaleBar(dl, x, y, len, 2, '');
+      labels.block(box);
+      // Its lettering's paper reaches as far round it as a label's.
+      for (const [t, tx, ty] of [
+        ['0', x, y - 6],
+        [text, ...at],
+      ] as const) {
+        const { w, h } = textBox(t, 's');
+        const mid = ty - CAP.s / 2;
+        labels.mask(dl, {
+          x0: tx - MASK,
+          y0: mid - h / 2 - MASK,
+          x1: tx + w + MASK,
+          y1: mid + h / 2 + MASK,
+        });
+        letter(dl, t, tx, ty, { size: 's' });
       }
     }
 
-    // Scale bar, bottom left, in 10⁶ km.
-    if (!edge) {
-      const target = (this.w * 0.22) / this.k;
-      const L = niceLength(target);
-      const len = L * this.k;
-      const x = 12,
-        y = this.h - 16;
-      scaleBar(dl, x, y, len, 2, '');
-      labels.block({ x0: x - 2, y0: y - 16, x1: x + len + 90, y1: y + 9 });
-      // The scale's lettering interrupts any line under it (an orbit, a period tick).
-      const text = `${isoNumber(String(L))} ×10⁶ km`;
-      const tw = textBox(text, 's').w;
-      const cap = CAP.s;
-      labels.mask(dl, [
-        [x + len + 5, y + 4 - cap - 1],
-        [x + len + 7 + tw, y + 4 - cap - 1],
-        [x + len + 7 + tw, y + 4 + 2],
-        [x + len + 5, y + 4 + 2],
-      ]);
-      letter(dl, '0', x, y - 6, { size: 's', anchor: 'start' });
-      letter(dl, text, x + len + 6, y + 4, { size: 's' });
-    }
-
-    // The date first: the longest label, with the fewest free spots; the others have alternatives.
-    // It keeps off SUN's places where it can, for SUN has nowhere else to go. Edge-on, the other
-    // labels keep a wider berth, so that the date and ECLIPTIC never read as one.
+    // The date first: the longest label. It keeps off the places the others may take where it can,
+    // for they have fewer (SUN and ♈ have nowhere else to go), and may stand further off itself.
     if (date) {
       const before = labels.mark();
-      const sun9 = sunReq(9);
-      for (const spot of sun9.spots!)
-        labels.obstacles.push({ ...labels.boxFor(sun9, spot), w: 0.5, soft: true });
-      const b = labels.place(dl, date);
-      labels.drop(before);
-      if (edge) labels.block(grow(b, 5));
+      for (const r of later.flat())
+        for (const k of [1, ...(r.reach ?? [])])
+          for (const spot of r.spots!)
+            labels.obstacles.push({ ...labels.boxFor(r, spot, k), w: 0.5, soft: true });
+      const after = labels.mark();
+      labels.placeFurther(dl, [date]);
+      labels.drop(before, after);
     }
-    for (const r of later) labels.placeAny(dl, Array.isArray(r) ? r : [r]);
+    for (const r of later) labels.placeFurther(dl, Array.isArray(r) ? r : [r]);
   }
 }
-
-const grow = (b: Box, d: number): Box => ({
-  x0: b.x0 - d,
-  y0: b.y0 - d,
-  x1: b.x1 + d,
-  y1: b.y1 + d,
-});
 
 /** Unit normal of an orbit plane from its inclination and node (ecliptic frame). */
 function orbitNormal(el: MeanElements): Vec3 {

@@ -19,6 +19,22 @@ export const unit2 = (a: Vec2): Vec2 => {
 };
 export const perp2 = (a: Vec2): Vec2 => [-a[1], a[0]];
 
+/** Distance from p to the segment a → b. */
+export function segDist(p: Vec2, a: Vec2, b: Vec2): number {
+  const v = sub2(b, a);
+  const l2 = v[0] * v[0] + v[1] * v[1];
+  const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * v[0] + (p[1] - a[1]) * v[1]) / l2)) : 0;
+  return Math.hypot(p[0] - a[0] - t * v[0], p[1] - a[1] - t * v[1]);
+}
+
+/** Distance between the segments a → b and c → d (0 where they cross). */
+export function segSegDist(a: Vec2, b: Vec2, c: Vec2, d: Vec2): number {
+  const side = (p: Vec2, q: Vec2, r: Vec2) =>
+    (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0) return 0;
+  return Math.min(segDist(a, c, d), segDist(b, c, d), segDist(c, a, b), segDist(d, a, b));
+}
+
 /** Filled arrowhead with its tip at `tip`, pointing along `dir`. */
 export function arrowhead(dl: DrawList, tip: Vec2, dir: Vec2, ref = '', size = ARROW) {
   const d = unit2(dir);
@@ -117,8 +133,24 @@ export function niceLength(target: number): number {
 }
 
 /**
- * Value text for a dimension line through `mid` along `dir` (px): parallel to the line, above it (ISO
- * 129-1 method 1), turned so it reads from the bottom or the right. Returns the text's corners.
+ * How a value on a dimension line along `dir` is turned and lifted (ISO 129-1 method 1: parallel to
+ * the line, above it, readable from the bottom or the right, so steep values read bottom-to-top): its
+ * angle (radians, clockwise on the page), the text's own "up" and the distance from the line to the
+ * middle of its capitals.
+ */
+export function dimTurn(dir: Vec2, size: TextSize = 'm') {
+  let deg = (Math.atan2(dir[1], dir[0]) * 180) / Math.PI;
+  if (deg > 60) deg -= 180;
+  if (deg <= -120) deg += 180;
+  const ang = (deg * Math.PI) / 180;
+  // Screen y grows downward.
+  const up: Vec2 = [Math.sin(ang), -Math.cos(ang)];
+  return { ang, up, lift: CAP[size] / 2 + 3 };
+}
+
+/**
+ * Value text for a dimension line through `mid` along `dir` (px), as dimTurn() turns it. Returns the
+ * text's corners.
  */
 export function dimText(
   dl: DrawList,
@@ -128,18 +160,11 @@ export function dimText(
   ref = '',
   size: TextSize = 'm',
 ): Vec2[] {
-  // Readable from the bottom or the right (ISO 129-1): steep values read bottom-to-top.
-  let ang = (Math.atan2(dir[1], dir[0]) * 180) / Math.PI;
-  if (ang > 60) ang -= 180;
-  if (ang <= -120) ang += 180;
-  const r = (ang * Math.PI) / 180;
-  // The text's own "up" after rotation (screen y grows downward).
-  const up: Vec2 = [Math.sin(r), -Math.cos(r)];
-  const lift = CAP[size] / 2 + 3;
+  const { ang, up, lift } = dimTurn(dir, size);
   return letter(dl, text, mid[0] + up[0] * lift, mid[1] + up[1] * lift, {
     anchor: 'middle',
     valign: 'middle',
-    rotate: ang,
+    rotate: (ang * 180) / Math.PI,
     ref,
     size,
   });
