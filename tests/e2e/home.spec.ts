@@ -45,6 +45,29 @@ const at = (page: Page, id: string) =>
 
 const days = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 86_400_000;
 
+/** The links that points of a body's symbol open, where no other symbol covers them. */
+const symbolHits = (page: Page, id: string) =>
+  page.evaluate((id) => {
+    const o = (window as unknown as Hooks).__pb.views.orrery;
+    const box = document.getElementById('orrery')!.getBoundingClientRect();
+    const pos = o.positions(),
+      rad = o.glyphRadii();
+    const hits = new Set<string | undefined>();
+    for (const f of [0.3, 0.6, 0.9])
+      for (let k = 0; k < 16; k++) {
+        const t = (k / 16) * 2 * Math.PI;
+        const x = pos[id]![0] + Math.cos(t) * f * rad[id]!,
+          y = pos[id]![1] + Math.sin(t) * f * rad[id]!;
+        const covered = Object.keys(pos).some(
+          (j) => j !== id && Math.hypot(x - pos[j]![0], y - pos[j]![1]) < rad[j]! + 0.5,
+        );
+        if (covered) continue;
+        const a = document.elementFromPoint(box.x + x, box.y + y)?.closest<HTMLElement>('a');
+        hits.add(a?.dataset.body);
+      }
+    return [...hits];
+  }, id);
+
 test('the home page draws the schematic and nothing else', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -153,20 +176,31 @@ test('every point of a symbol opens its own body; no two links overlap or shrink
   ).toBe('earth');
 });
 
-test('a link cut where it meets another shows its whole focus ring', async ({
+test('a link cut where it meets another shows its whole focus ring, under its neighbours', async ({
   page,
   isMobile,
   browserName,
 }) => {
   test.skip(isMobile, 'keyboard');
+  const tab = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
   // 1440×900 on 2026-10-18: the Earth's link is cut where it meets Venus's.
   await page.goto('?capture&date=2026-10-18');
   const earth = page.locator('a[data-body="earth"]');
   expect(await earth.evaluate((a) => a.style.clipPath)).toMatch(/^polygon/);
   await page.locator('a[data-body="venus"]').focus();
-  await page.keyboard.press(browserName === 'webkit' ? 'Alt+Tab' : 'Tab');
+  await page.keyboard.press(tab);
   await expect(earth).toBeFocused();
   expect(await earth.evaluate((a) => getComputedStyle(a).clipPath)).toBe('none');
+  // Venus keeps its symbol, and the Moon's link stays under the Earth's.
+  expect(await symbolHits(page, 'venus')).toEqual(['venus']);
+  expect(await symbolHits(page, 'earth')).toEqual(['earth']);
+  // 1280×720 on 2027-04-04, Mercury in front of Venus: with Venus focused, Mercury keeps its symbol.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('?capture&date=2027-04-04');
+  await page.locator('a[data-body="mercury"]').focus();
+  await page.keyboard.press(tab);
+  await expect(page.locator('a[data-body="venus"]')).toBeFocused();
+  expect(await symbolHits(page, 'mercury')).toEqual(['mercury']);
 });
 
 test('at 2060 the clock goes back to today, fading the bodies out and in', async ({ page }) => {
