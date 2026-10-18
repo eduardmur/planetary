@@ -217,6 +217,38 @@ describe('body pages', () => {
       expect(text(popover(id, 'ringSystem'))).not.toContain('Not drawn:');
       expect(text(popover(id, 'ringSystem'))).toContain('Not drawn at this scale: ');
     }
+    // The lists break only after a "·", each entry kept whole; Adams's arcs, too many for one line,
+    // only after a comma or the colon, so that every name keeps its number.
+    const lists = (id: BodyId) => popover(id, 'ringSystem').querySelector('.also dl.edges + p')!;
+    expect(lists('saturn').querySelectorAll('.nowrap').map(text)).toEqual([
+      'D outer edge 74,510',
+      'Titan ringlet 77,871',
+      'Maxwell gap/ringlet 87,491',
+      'Keeler gap 136,487',
+      'G inner edge 166,000',
+      'G outer edge 173,000',
+      'E inner edge 180,000',
+      'E outer edge 480,000',
+    ]);
+    expect(lists('neptune').querySelectorAll('.nowrap').map(text)).toEqual([
+      'Lassell (1989N4R*) ~53,200',
+      'Unnamed (indistinct) 61,953',
+      'Arcs in Adams Ring (Courage,',
+      'Liberté,',
+      'Egalité 1,',
+      'Egalité 2,',
+      'Fraternité) 62,933:',
+      'NASA gives no longitudes',
+    ]);
+    for (const id of ['jupiter', 'saturn', 'uranus', 'neptune'] as const)
+      expect(lists(id).innerHTML, id).not.toMatch(/ ·/);
+    // NASA's notes: sentences run on in one paragraph; Neptune's parenthesis keeps one of its own.
+    const notes = (id: BodyId) => popover(id, 'ringSystem').querySelectorAll('.also p.n').map(text);
+    expect(notes('saturn')).toHaveLength(1);
+    expect(notes('neptune')).toEqual([
+      '(*Lassell and Arago were originally identified as one ring, designated 1989N4R)',
+      'For more details on the rings of Neptune, see the PDS Rings Node Vital Statistics.',
+    ]);
 
     expect(also('mars', 'perihelion')).toContain('Longitude of perihelion (deg) 336.04084');
     expect(also('mars', 'orbitalInclination')).toContain('Longitude of ascending node (deg)');
