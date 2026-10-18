@@ -692,20 +692,20 @@ export function initBody(data: PageData) {
       },
       { passive: false },
     );
-    // A tab that takes keyboard focus comes out from under the faded edges. Only keyboard focus: a
-    // tab that a press focuses must stay under the finger or the mouse, or the click is lost.
+    // A tab that takes keyboard focus under a faded edge (or under ‹ › where they show) goes to the
+    // middle of the strip. The strip snaps to tabs in its middle: a scroll just far enough to clear
+    // the edge would snap back short of it. Only keyboard focus: a tab that a press focuses must
+    // stay under the finger or the mouse, or the click is lost.
     strip.addEventListener('focusin', (e) => {
       if (!(e.target as Element).matches(':focus-visible')) return;
       const st = strip.getBoundingClientRect(),
         r = (e.target as Element).getBoundingClientRect(),
-        pad = 32;
-      const d =
-        r.left < st.left + pad
-          ? r.left - st.left - pad
-          : r.right > st.right - pad
-            ? r.right - st.right + pad
-            : 0;
-      if (d) strip.scrollBy({ left: d, behavior: 'instant' });
+        pad = 32 + (parseFloat(getComputedStyle(strip).getPropertyValue('--more-w')) || 0);
+      if (r.left < st.left + pad || r.right > st.right - pad)
+        strip.scrollBy({
+          left: r.left + r.width / 2 - (st.left + st.width / 2),
+          behavior: 'instant',
+        });
     });
     // A click on a tab right after a selection takes the selected row along in the address too.
     for (const t of tabs) t.addEventListener('click', flushHash, true);

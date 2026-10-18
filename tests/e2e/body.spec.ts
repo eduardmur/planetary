@@ -1323,6 +1323,25 @@ test('the strip marks a side only where a tab’s name is cut there', async ({ p
   }
 });
 
+/** How far the name of the tab the keyboard is on lies inside the strip, and clear of a faded end
+ *  (with its ‹ ›) where tabs are hidden, px: below 0 under them. */
+const clearOfFade = (page: Page) =>
+  page.evaluate(async () => {
+    // Once the strip has marked its ends after scrolling.
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const strip = document.querySelector<HTMLElement>('.tabs .strip')!;
+    const s = strip.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(document.activeElement!);
+    const t = range.getBoundingClientRect();
+    const more = strip.parentElement!.dataset.more ?? '';
+    const fade = 30 + (parseFloat(getComputedStyle(strip).getPropertyValue('--more-w')) || 0);
+    const gaps = [t.left - s.left, s.right - t.right];
+    if (more === 'left' || more === 'both') gaps.push(t.left - s.left - fade);
+    if (more === 'right' || more === 'both') gaps.push(s.right - fade - t.right);
+    return Math.min(...gaps);
+  });
+
 test('a tab that takes keyboard focus comes out from under the fade', async ({
   page,
   isMobile,
@@ -1339,6 +1358,18 @@ test('a tab that takes keyboard focus comes out from under the fade', async ({
   const mercury = page.locator('.tabs a[data-body="mercury"]');
   await expect(mercury).toBeFocused();
   await expect.poll(() => strip.evaluate((s) => s.scrollLeft)).toBe(0);
+  // Along the strip and back in a narrower window, where ‹ › stand on the faded ends.
+  await page.setViewportSize({ width: 420, height: 800 });
+  for (const [key, last] of [
+    ['ArrowRight', 'pluto'],
+    ['ArrowLeft', 'mercury'],
+  ] as const) {
+    for (let i = 0; i < 9; i++) {
+      await page.keyboard.press(key);
+      expect(await clearOfFade(page), `${key} ${i + 1}`).toBeGreaterThanOrEqual(0);
+    }
+    await expect(page.locator(`.tabs a[data-body="${last}"]`)).toBeFocused();
+  }
 });
 
 test('phones: a tap on a tab near the end of the strip opens it', async ({ page, isMobile }) => {
