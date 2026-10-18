@@ -187,9 +187,24 @@ function alsoDrawn(id: BodyId, key: string): string {
   return '';
 }
 
-/** One line of the ledger, in its own words. */
-const conflict = (d: Discrepancy) =>
-  `<p class="conflict">NASA’s pages disagree: ${esc(d.what)}: ${esc(d.a)} (${esc(d.aSrc)}) vs ${esc(d.b)} (${esc(d.bSrc)}).${d.note ? ` ${esc(d.note)}` : ''}</p>`;
+/**
+ * A line of the ledger, in its own words: two pages that disagree, or one page that disagrees with
+ * itself (named once, in the lead). Lines that compare the same thing on the same page with the same
+ * note share one paragraph, as Uranus's three ring ratios do; map() passes the row's whole list.
+ */
+const conflict = (d: Discrepancy, i: number, list: Discrepancy[]): string => {
+  const together = (e: Discrepancy | undefined) =>
+    !!e && e.within === d.within && e.what === d.what && e.note === d.note;
+  if (together(list[i - 1])) return ''; // already in the paragraph before
+  let end = i + 1;
+  while (together(list[end])) end++;
+  const src = (s: string) => (s === d.within ? '' : ` (${esc(s)})`);
+  const pairs = list
+    .slice(i, end)
+    .map((e) => `${esc(e.a)}${src(e.aSrc)} vs ${esc(e.b)}${src(e.bSrc)}`);
+  const lead = d.within ? `NASA’s ${esc(d.within)} disagrees with itself` : 'NASA’s pages disagree';
+  return `<p class="conflict">${lead} on ${esc(d.what)}: ${pairs.join('; ')}.${d.note ? ` ${esc(d.note)}` : ''}</p>`;
+};
 
 /**
  * A row's popover: the label and NASA's value, its ratio to Earth, NASA's definition verbatim, what

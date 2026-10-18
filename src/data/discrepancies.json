@@ -2,16 +2,16 @@
   {
     "body": "mercury",
     "key": "diameter",
-    "what": "Diameter vs 2 × equatorial radius (km)",
+    "what": "diameter vs 2 × equatorial radius (km)",
     "a": "4879",
     "aSrc": "main table",
-    "b": "2 × 2440.5",
+    "b": "2 × 2440.5 = 4881",
     "bSrc": "mercuryfact.html"
   },
   {
     "body": "venus",
     "key": "rotationPeriod",
-    "what": "Rotation period (h)",
+    "what": "rotation period (h)",
     "a": "-5832.5",
     "aSrc": "main table",
     "b": "-5832.6",
@@ -20,7 +20,7 @@
   {
     "body": "earth",
     "key": "density",
-    "what": "Density (kg/m³)",
+    "what": "density (kg/m³)",
     "a": "5514",
     "aSrc": "main table",
     "b": "5513",
@@ -29,16 +29,16 @@
   {
     "body": "moon",
     "key": "diameter",
-    "what": "Diameter vs 2 × equatorial radius (km)",
+    "what": "diameter vs 2 × equatorial radius (km)",
     "a": "3475",
     "aSrc": "main table",
-    "b": "2 × 1738.1",
+    "b": "2 × 1738.1 = 3476.2",
     "bSrc": "moonfact.html"
   },
   {
     "body": "mars",
     "key": "meanTemperature",
-    "what": "Mean temperature vs \"Average temperature\" (°C)",
+    "what": "mean temperature vs “Average temperature” (°C)",
     "a": "-65",
     "aSrc": "main table",
     "b": "~214 K (-59 C)",
@@ -47,7 +47,7 @@
   {
     "body": "uranus",
     "key": "meanTemperature",
-    "what": "Mean temperature vs \"Temperature at 1 bar\" (°C)",
+    "what": "mean temperature vs “Temperature at 1 bar” (°C)",
     "a": "-195",
     "aSrc": "main table",
     "b": "76 K (-197 C)",
@@ -56,37 +56,40 @@
   {
     "body": "uranus",
     "key": "ringSystem",
-    "what": "Ring \"Eta\": radius/equatorial radius",
-    "a": "1.834",
+    "what": "the Radius/Eq. radius column",
+    "a": "Eta 1.834",
     "aSrc": "uranringfact.html",
-    "b": "1.846",
-    "bSrc": "47,176 km ÷ 25,559 km",
-    "note": "The sheets draw rings from the km column."
+    "b": "47,176 ÷ 25,559 = 1.846",
+    "bSrc": "uranringfact.html",
+    "within": "uranringfact.html",
+    "note": "Planetary draws the rings from the km column."
   },
   {
     "body": "uranus",
     "key": "ringSystem",
-    "what": "Ring \"Delta\": radius/equatorial radius",
-    "a": "1.900",
+    "what": "the Radius/Eq. radius column",
+    "a": "Delta 1.900",
     "aSrc": "uranringfact.html",
-    "b": "1.890",
-    "bSrc": "48,300 km ÷ 25,559 km",
-    "note": "The sheets draw rings from the km column."
+    "b": "48,300 ÷ 25,559 = 1.890",
+    "bSrc": "uranringfact.html",
+    "within": "uranringfact.html",
+    "note": "Planetary draws the rings from the km column."
   },
   {
     "body": "uranus",
     "key": "ringSystem",
-    "what": "Ring \"Epsilon\": radius/equatorial radius",
-    "a": "2.006",
+    "what": "the Radius/Eq. radius column",
+    "a": "Epsilon 2.006",
     "aSrc": "uranringfact.html",
-    "b": "2.001",
-    "bSrc": "51,149 km ÷ 25,559 km",
-    "note": "The sheets draw rings from the km column."
+    "b": "51,149 ÷ 25,559 = 2.001",
+    "bSrc": "uranringfact.html",
+    "within": "uranringfact.html",
+    "note": "Planetary draws the rings from the km column."
   },
   {
     "body": "pluto",
     "key": "gravity",
-    "what": "Gravity vs surface acceleration at the equator (m/s²)",
+    "what": "gravity vs surface acceleration at the equator (m/s²)",
     "a": "0.7",
     "aSrc": "main table",
     "b": "0.62",
@@ -95,7 +98,7 @@
   {
     "body": "pluto",
     "key": "escapeVelocity",
-    "what": "Escape velocity (km/s)",
+    "what": "escape velocity (km/s)",
     "a": "1.3",
     "aSrc": "main table",
     "b": "1.21",
@@ -104,7 +107,7 @@
   {
     "body": "pluto",
     "key": "distanceFromSun",
-    "what": "Distance from Sun vs semimajor axis (10⁶ km)",
+    "what": "distance from Sun vs semimajor axis (10⁶ km)",
     "a": "5906.4",
     "aSrc": "main table",
     "b": "5869.656",
@@ -113,7 +116,7 @@
   {
     "body": "pluto",
     "key": "perihelion",
-    "what": "Perihelion (10⁶ km)",
+    "what": "perihelion (10⁶ km)",
     "a": "4436.8",
     "aSrc": "main table",
     "b": "4434.987",
@@ -122,7 +125,7 @@
   {
     "body": "pluto",
     "key": "aphelion",
-    "what": "Aphelion (10⁶ km)",
+    "what": "aphelion (10⁶ km)",
     "a": "7375.9",
     "aSrc": "main table",
     "b": "7304.326",
@@ -131,7 +134,7 @@
   {
     "body": "pluto",
     "key": "orbitalVelocity",
-    "what": "Orbital velocity vs mean orbital velocity (km/s)",
+    "what": "orbital velocity vs mean orbital velocity (km/s)",
     "a": "4.7",
     "aSrc": "main table",
     "b": "4.64",
@@ -140,7 +143,7 @@
   {
     "body": "pluto",
     "key": "meanTemperature",
-    "what": "Mean temperature vs \"Surface temperature\" (°C)",
+    "what": "mean temperature vs “Surface temperature” (°C)",
     "a": "-225",
     "aSrc": "main table",
     "b": "24 - 38 K (-247 - -233 C)",
@@ -149,29 +152,22 @@
   {
     "body": "pluto",
     "key": "meanTemperature",
-    "what": "\"Surface temperature\": 24 K printed as -247 C",
-    "a": "24 - 38 K (-247 - -233 C)",
+    "what": "“Surface temperature”",
+    "a": "24 - 38 K printed as -247 to -233 C",
     "aSrc": "plutofact.html",
-    "b": "-249.15 C",
-    "bSrc": "K − 273.15"
-  },
-  {
-    "body": "pluto",
-    "key": "meanTemperature",
-    "what": "\"Surface temperature\": 38 K printed as -233 C",
-    "a": "24 - 38 K (-247 - -233 C)",
-    "aSrc": "plutofact.html",
-    "b": "-235.15 C",
-    "bSrc": "K − 273.15"
+    "b": "-249.15 to -235.15 C",
+    "bSrc": "K − 273.15",
+    "within": "plutofact.html"
   },
   {
     "body": "pluto",
     "key": "orbitalEccentricity",
-    "what": "Eccentricity vs (Q − q)/(Q + q) from the same table",
+    "what": "eccentricity vs perihelion and aphelion",
     "a": "0.244",
     "aSrc": "main table",
-    "b": "0.2488",
-    "bSrc": "main table q 4436.8, Q 7375.9",
-    "note": "The sheets draw the ellipse from q and Q and print e as listed."
+    "b": "(7375.9 − 4436.8)/(7375.9 + 4436.8) = 0.2488",
+    "bSrc": "main table",
+    "within": "main table",
+    "note": "Planetary draws the ellipse from the perihelion and aphelion, and lists the eccentricity as NASA prints it."
   }
 ]

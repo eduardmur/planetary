@@ -7,36 +7,37 @@ NASA's fact sheets are curated by hand and updated page by page, so the main tab
 sometimes print different values for what looks like the same quantity. Some differences are only
 rounding; others come from different epochs or definitions (the main table's "Orbital Period" is the
 tropical period, its "Gravity" is the equatorial acceleration including rotation, and so on), and some
-are plain conflicts. The sheets never pick a winner: each value is shown where NASA prints it, and each
-drawing is sized by the value printed on it.
+are plain conflicts. A few pages also disagree with themselves: the ledger checks the main table's
+eccentricity against its perihelion and aphelion, Celsius against Kelvin where a page prints both, and
+each ring sheet's Radius/Eq. radius column against its radii in km. Planetary never picks a winner:
+each value is shown where NASA prints it, and each drawing is sized by the value printed on it.
 
-## Conflicts (19)
+## Conflicts (18)
 
-| Body | Value | One page | Other page | Note |
+| Body | Value | Printed | Compared with | Note |
 | --- | --- | --- | --- | --- |
-| Mercury | Diameter vs 2 × equatorial radius (km) | 4879 (main table) | 2 × 2440.5 (mercuryfact.html) |  |
+| Mercury | Diameter vs 2 × equatorial radius (km) | 4879 (main table) | 2 × 2440.5 = 4881 (mercuryfact.html) |  |
 | Venus | Rotation period (h) | -5832.5 (main table) | -5832.6 (venusfact.html) |  |
 | Earth | Density (kg/m³) | 5514 (main table) | 5513 (earthfact.html) |  |
-| Moon | Diameter vs 2 × equatorial radius (km) | 3475 (main table) | 2 × 1738.1 (moonfact.html) |  |
-| Mars | Mean temperature vs "Average temperature" (°C) | -65 (main table) | ~214 K (-59 C) (marsfact.html) |  |
-| Uranus | Mean temperature vs "Temperature at 1 bar" (°C) | -195 (main table) | 76 K (-197 C) (uranusfact.html) |  |
-| Uranus | Ring "Eta": radius/equatorial radius | 1.834 (uranringfact.html) | 1.846 (47,176 km ÷ 25,559 km) | The sheets draw rings from the km column. |
-| Uranus | Ring "Delta": radius/equatorial radius | 1.900 (uranringfact.html) | 1.890 (48,300 km ÷ 25,559 km) | The sheets draw rings from the km column. |
-| Uranus | Ring "Epsilon": radius/equatorial radius | 2.006 (uranringfact.html) | 2.001 (51,149 km ÷ 25,559 km) | The sheets draw rings from the km column. |
+| Moon | Diameter vs 2 × equatorial radius (km) | 3475 (main table) | 2 × 1738.1 = 3476.2 (moonfact.html) |  |
+| Mars | Mean temperature vs “Average temperature” (°C) | -65 (main table) | ~214 K (-59 C) (marsfact.html) |  |
+| Uranus | Mean temperature vs “Temperature at 1 bar” (°C) | -195 (main table) | 76 K (-197 C) (uranusfact.html) |  |
+| Uranus | The Radius/Eq. radius column | Eta 1.834 (uranringfact.html) | 47,176 ÷ 25,559 = 1.846 (uranringfact.html) | Planetary draws the rings from the km column. |
+| Uranus | The Radius/Eq. radius column | Delta 1.900 (uranringfact.html) | 48,300 ÷ 25,559 = 1.890 (uranringfact.html) | Planetary draws the rings from the km column. |
+| Uranus | The Radius/Eq. radius column | Epsilon 2.006 (uranringfact.html) | 51,149 ÷ 25,559 = 2.001 (uranringfact.html) | Planetary draws the rings from the km column. |
 | Pluto | Gravity vs surface acceleration at the equator (m/s²) | 0.7 (main table) | 0.62 (plutofact.html) |  |
 | Pluto | Escape velocity (km/s) | 1.3 (main table) | 1.21 (plutofact.html) |  |
 | Pluto | Distance from Sun vs semimajor axis (10⁶ km) | 5906.4 (main table) | 5869.656 (plutofact.html) |  |
 | Pluto | Perihelion (10⁶ km) | 4436.8 (main table) | 4434.987 (plutofact.html) |  |
 | Pluto | Aphelion (10⁶ km) | 7375.9 (main table) | 7304.326 (plutofact.html) |  |
 | Pluto | Orbital velocity vs mean orbital velocity (km/s) | 4.7 (main table) | 4.64 (plutofact.html) |  |
-| Pluto | Mean temperature vs "Surface temperature" (°C) | -225 (main table) | 24 - 38 K (-247 - -233 C) (plutofact.html) |  |
-| Pluto | "Surface temperature": 24 K printed as -247 C | 24 - 38 K (-247 - -233 C) (plutofact.html) | -249.15 C (K − 273.15) |  |
-| Pluto | "Surface temperature": 38 K printed as -233 C | 24 - 38 K (-247 - -233 C) (plutofact.html) | -235.15 C (K − 273.15) |  |
-| Pluto | Eccentricity vs (Q − q)/(Q + q) from the same table | 0.244 (main table) | 0.2488 (main table q 4436.8, Q 7375.9) | The sheets draw the ellipse from q and Q and print e as listed. |
+| Pluto | Mean temperature vs “Surface temperature” (°C) | -225 (main table) | 24 - 38 K (-247 - -233 C) (plutofact.html) |  |
+| Pluto | “Surface temperature” | 24 - 38 K printed as -247 to -233 C (plutofact.html) | -249.15 to -235.15 C (K − 273.15) |  |
+| Pluto | Eccentricity vs perihelion and aphelion | 0.244 (main table) | (7375.9 − 4436.8)/(7375.9 + 4436.8) = 0.2488 (main table) | Planetary draws the ellipse from the perihelion and aphelion, and lists the eccentricity as NASA prints it. |
 
 ## Rounding only (103)
 
-| Body | Value | One page | Other page | Note |
+| Body | Value | Printed | Compared with | Note |
 | --- | --- | --- | --- | --- |
 | Mercury | Distance from Sun vs semimajor axis (10⁶ km) | 57.9 (main table) | 57.909 (mercuryfact.html) |  |
 | Mercury | Aphelion (10⁶ km) | 69.8 (main table) | 69.818 (mercuryfact.html) |  |
@@ -44,7 +45,7 @@ drawing is sized by the value printed on it.
 | Mercury | Orbital velocity vs mean orbital velocity (km/s) | 47.4 (main table) | 47.36 (mercuryfact.html) |  |
 | Mercury | Orbital inclination (°) | 7.0 (main table) | 7.004 (mercuryfact.html) |  |
 | Mercury | Orbital eccentricity | 0.206 (main table) | 0.2056 (mercuryfact.html) |  |
-| Venus | Diameter vs 2 × equatorial radius (km) | 12,104 (main table) | 2 × 6051.8 (venusfact.html) |  |
+| Venus | Diameter vs 2 × equatorial radius (km) | 12,104 (main table) | 2 × 6051.8 = 12,103.6 (venusfact.html) |  |
 | Venus | Gravity vs surface acceleration at the equator (m/s²) | 8.9 (main table) | 8.87 (venusfact.html) |  |
 | Venus | Escape velocity (km/s) | 10.4 (main table) | 10.36 (venusfact.html) |  |
 | Venus | Distance from Sun vs semimajor axis (10⁶ km) | 108.2 (main table) | 108.210 (venusfact.html) |  |
@@ -55,7 +56,7 @@ drawing is sized by the value printed on it.
 | Venus | Orbital inclination (°) | 3.4 (main table) | 3.395 (venusfact.html) |  |
 | Venus | Orbital eccentricity | 0.007 (main table) | 0.0068 (venusfact.html) |  |
 | Venus | Obliquity to orbit (°) | 177.4 (main table) | 177.36 (venusfact.html) |  |
-| Earth | Diameter vs 2 × equatorial radius (km) | 12,756 (main table) | 2 × 6378.137 (earthfact.html) |  |
+| Earth | Diameter vs 2 × equatorial radius (km) | 12,756 (main table) | 2 × 6378.137 = 12,756.274 (earthfact.html) |  |
 | Earth | Gravity vs surface acceleration at the equator (m/s²) | 9.8 (main table) | 9.780 (earthfact.html) |  |
 | Earth | Escape velocity (km/s) | 11.2 (main table) | 11.186 (earthfact.html) |  |
 | Earth | Rotation period (h) | 23.9 (main table) | 23.9345 (earthfact.html) |  |
@@ -77,7 +78,7 @@ drawing is sized by the value printed on it.
 | Moon | Orbital inclination (°) | 5.1 (main table) | 5.145 (moonfact.html) |  |
 | Moon | Orbital eccentricity | 0.055 (main table) | 0.0549 (moonfact.html) |  |
 | Moon | Obliquity to orbit (°) | 6.7 (main table) | 6.68 (moonfact.html) |  |
-| Mars | Diameter vs 2 × equatorial radius (km) | 6792 (main table) | 2 × 3396.2 (marsfact.html) |  |
+| Mars | Diameter vs 2 × equatorial radius (km) | 6792 (main table) | 2 × 3396.2 = 6792.4 (marsfact.html) |  |
 | Mars | Gravity vs surface acceleration at the equator (m/s²) | 3.7 (main table) | 3.69 (marsfact.html) |  |
 | Mars | Escape velocity (km/s) | 5.0 (main table) | 5.03 (marsfact.html) |  |
 | Mars | Rotation period (h) | 24.6 (main table) | 24.6229 (marsfact.html) |  |
@@ -101,7 +102,7 @@ drawing is sized by the value printed on it.
 | Jupiter | Orbital inclination (°) | 1.3 (main table) | 1.304 (jupiterfact.html) |  |
 | Jupiter | Orbital eccentricity | 0.049 (main table) | 0.0487 (jupiterfact.html) |  |
 | Jupiter | Obliquity to orbit (°) | 3.1 (main table) | 3.13 (jupiterfact.html) |  |
-| Jupiter | Mean temperature vs "Temperature at 1 bar" (°C) | -110 (main table) | 165 K (-108 C) (jupiterfact.html) |  |
+| Jupiter | Mean temperature vs “Temperature at 1 bar” (°C) | -110 (main table) | 165 K (-108 C) (jupiterfact.html) |  |
 | Saturn | Gravity vs surface acceleration at the equator (m/s²) | 9.0 (main table) | 8.96 (saturnfact.html) |  |
 | Saturn | Rotation period (h) | 10.7 (main table) | 10.656* (saturnfact.html) |  |
 | Saturn | Length of day (h) | 10.7 (main table) | 10.656 (saturnfact.html) |  |
@@ -112,7 +113,7 @@ drawing is sized by the value printed on it.
 | Saturn | Orbital velocity vs mean orbital velocity (km/s) | 9.7 (main table) | 9.67 (saturnfact.html) |  |
 | Saturn | Orbital inclination (°) | 2.5 (main table) | 2.486 (saturnfact.html) |  |
 | Saturn | Obliquity to orbit (°) | 26.7 (main table) | 26.73 (saturnfact.html) |  |
-| Saturn | Mean temperature vs "Temperature at 1 bar" (°C) | -140 (main table) | 134 K (-139 C) (saturnfact.html) |  |
+| Saturn | Mean temperature vs “Temperature at 1 bar” (°C) | -140 (main table) | 134 K (-139 C) (saturnfact.html) |  |
 | Uranus | Gravity vs surface acceleration at the equator (m/s²) | 8.7 (main table) | 8.69 (uranusfact.html) |  |
 | Uranus | Rotation period (h) | -17.2 (main table) | -17.24* (uranusfact.html) |  |
 | Uranus | Length of day (h) | 17.2 (main table) | 17.24 (uranusfact.html) |  |
@@ -134,7 +135,7 @@ drawing is sized by the value printed on it.
 | Neptune | Orbital inclination (°) | 1.8 (main table) | 1.770 (neptunefact.html) |  |
 | Neptune | Orbital eccentricity | 0.010 (main table) | 0.0097 (neptunefact.html) |  |
 | Neptune | Obliquity to orbit (°) | 28.3 (main table) | 28.32 (neptunefact.html) |  |
-| Neptune | Mean temperature vs "Temperature at 1 bar" (°C) | -200 (main table) | 72 K (-201 C) (neptunefact.html) |  |
+| Neptune | Mean temperature vs “Temperature at 1 bar” (°C) | -200 (main table) | 72 K (-201 C) (neptunefact.html) |  |
 | Pluto | Density (kg/m³) | 1850 (main table) | 1854 (plutofact.html) |  |
 | Pluto | Rotation period (h) | -153.3 (main table) | -153.2928 (plutofact.html) |  |
 | Pluto | Length of day (h) | 153.3 (main table) | 153.2820 (plutofact.html) |  |

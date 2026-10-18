@@ -1,14 +1,16 @@
 #!/usr/bin/env node
-// Where NASA's pages disagree with each other. Compares the main table (index.html) with each body's
-// own fact sheet, and checks a few internal relations, then writes data/discrepancies.md and, for the
-// sheets' row popovers, the conflicts alone as src/data/discrepancies.json.
+// Where NASA's pages disagree. Compares the main table (index.html) with each body's own fact sheet,
+// and checks a few relations within one page (eccentricity against perihelion and aphelion, Celsius
+// against Kelvin, a ring sheet's ratio column against its radii in km), then writes
+// data/discrepancies.md and, for the row popovers, the conflicts alone as src/data/discrepancies.json.
 //
 //   node scripts/ledger.ts            # rewrite both files
 //   node scripts/ledger.ts --check    # fail if either is out of date (used by CI and the tests)
 //
 // A pair counts as "rounding" when the more precise value, rounded to the other's printed decimals,
-// equals it; anything else is a "conflict". Nothing here changes what the sheets show: every value
-// is still drawn and listed exactly where NASA prints it.
+// equals it; anything else is a "conflict". A value worked out from printed ones shows its sum with
+// the result ("2 × 2440.5 = 4881"). Nothing here changes what the pages show: every value is still
+// drawn and listed exactly where NASA prints it.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -26,13 +28,16 @@ const F = raw as unknown as FactSheet;
 
 interface Entry {
   body: BodyId;
-  /** The schedule row the value belongs to: a main-table key (ringSystem for the ring sheets). */
+  /** The table row the value belongs to: a main-table key (ringSystem for the ring sheets). */
   key: string;
+  /** What is compared, as running text ("rotation period (h)"); the Markdown table capitalises it. */
   what: string;
   a: string;
   aSrc: string;
   b: string;
   bSrc: string;
+  /** The one page (or table) both values come from, when it disagrees with itself. */
+  within?: string;
   kind: 'rounding' | 'conflict';
   note?: string;
 }
@@ -43,6 +48,10 @@ const decimals = (t: string) => {
   const m = t.replace(/,/g, '').match(/\.(\d+)/);
   return m ? m[1]!.length : 0;
 };
+
+/** An exact product, as NASA prints its numbers: no trailing zeros, commas from 10,000. */
+const exact = (x: number, d: number) =>
+  x.toLocaleString('en-US', { maximumFractionDigits: d, useGrouping: Math.abs(x) >= 10_000 });
 
 /**
  * The interval a printed number stands for: ± half a unit in its last place. Trailing zeros of an
@@ -86,13 +95,14 @@ function compare(
   const ib0 = interval(b.text, b.value);
   const ib: [number, number] = [ib0[0] * scale, ib0[1] * scale];
   const same = decimals(a.text) === decimals(b.text) && scale === 1;
+  const printed = b.text + (b.note ?? '');
   entries.push({
     body,
     key,
     what,
     a: a.text + (a.note ?? ''),
     aSrc,
-    b: (scale === 1 ? '' : `${scale} × `) + b.text + (b.note ?? ''),
+    b: scale === 1 ? printed : `${scale} × ${printed} = ${exact(bv, decimals(b.text))}`,
     bSrc,
     kind: consistent(ia, ib, same) ? 'rounding' : 'conflict',
     ...(note ? { note } : {}),
@@ -109,7 +119,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'diameter',
-    'Diameter vs 2 × equatorial radius (km)',
+    'diameter vs 2 × equatorial radius (km)',
     main(id, 'diameter'),
     'main table',
     row(id, 'bulk', 'equatorialRadius')?.body,
@@ -119,7 +129,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'density',
-    'Density (kg/m³)',
+    'density (kg/m³)',
     main(id, 'density'),
     'main table',
     row(id, 'bulk', 'density')?.body,
@@ -128,7 +138,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'gravity',
-    'Gravity vs surface acceleration at the equator (m/s²)',
+    'gravity vs surface acceleration at the equator (m/s²)',
     main(id, 'gravity'),
     'main table',
     row(id, 'bulk', 'accelEquator')?.body,
@@ -137,7 +147,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'escapeVelocity',
-    'Escape velocity (km/s)',
+    'escape velocity (km/s)',
     main(id, 'escapeVelocity'),
     'main table',
     row(id, 'bulk', 'escapeVelocity')?.body,
@@ -146,7 +156,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'rotationPeriod',
-    'Rotation period (h)',
+    'rotation period (h)',
     main(id, 'rotationPeriod'),
     'main table',
     row(id, 'orbital', 'siderealRotation')?.body,
@@ -155,7 +165,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'dayLength',
-    'Length of day (h)',
+    'length of day (h)',
     main(id, 'dayLength'),
     'main table',
     row(id, 'orbital', 'dayLength')?.body,
@@ -164,7 +174,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'distanceFromSun',
-    'Distance from Sun vs semimajor axis (10⁶ km)',
+    'distance from Sun vs semimajor axis (10⁶ km)',
     main(id, 'distanceFromSun'),
     'main table',
     row(id, 'orbital', 'semimajorAxis')?.body,
@@ -173,7 +183,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'perihelion',
-    'Perihelion (10⁶ km)',
+    'perihelion (10⁶ km)',
     main(id, 'perihelion'),
     'main table',
     row(id, 'orbital', id === 'moon' ? 'perigee' : 'perihelion')?.body,
@@ -182,7 +192,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'aphelion',
-    'Aphelion (10⁶ km)',
+    'aphelion (10⁶ km)',
     main(id, 'aphelion'),
     'main table',
     row(id, 'orbital', id === 'moon' ? 'apogee' : 'aphelion')?.body,
@@ -193,7 +203,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'orbitalPeriod',
-    `Orbital period vs ${period === 'tropicalPeriod' ? 'tropical' : 'sidereal'} period (days)`,
+    `orbital period vs ${period === 'tropicalPeriod' ? 'tropical' : 'sidereal'} period (days)`,
     main(id, 'orbitalPeriod'),
     'main table',
     row(id, 'orbital', period)?.body,
@@ -202,7 +212,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'orbitalVelocity',
-    'Orbital velocity vs mean orbital velocity (km/s)',
+    'orbital velocity vs mean orbital velocity (km/s)',
     main(id, 'orbitalVelocity'),
     'main table',
     row(id, 'orbital', 'meanOrbitalVelocity')?.body,
@@ -211,7 +221,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'orbitalInclination',
-    'Orbital inclination (°)',
+    'orbital inclination (°)',
     main(id, 'orbitalInclination'),
     'main table',
     row(id, 'orbital', 'inclination')?.body,
@@ -220,7 +230,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'orbitalEccentricity',
-    'Orbital eccentricity',
+    'orbital eccentricity',
     main(id, 'orbitalEccentricity'),
     'main table',
     row(id, 'orbital', 'eccentricity')?.body,
@@ -229,7 +239,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'obliquity',
-    'Obliquity to orbit (°)',
+    'obliquity to orbit (°)',
     main(id, 'obliquity'),
     'main table',
     row(id, 'orbital', 'obliquity')?.body,
@@ -238,7 +248,7 @@ for (const id of BODY_IDS) {
   compare(
     id,
     'moons',
-    'Number of moons',
+    'number of moons',
     main(id, 'moons'),
     'main table',
     row(id, 'bulk', 'satellites')?.body,
@@ -256,56 +266,48 @@ for (const id of BODY_IDS) {
       hi = c[2] !== undefined ? Number(c[2]) : lo;
     const ib: [number, number] =
       c[2] !== undefined ? [Math.min(lo, hi), Math.max(lo, hi)] : interval(c[1]!, lo);
-    if (!consistent(interval(mt.text, mt.value), ib, false))
+    const conflict = !consistent(interval(mt.text, mt.value), ib, false);
+    if (conflict || mt.value !== lo || c[2] !== undefined)
       entries.push({
         body: id,
         key: 'meanTemperature',
-        what: `Mean temperature vs "${tRow.label}" (°C)`,
+        what: `mean temperature vs “${tRow.label}” (°C)`,
         a: mt.text,
         aSrc: 'main table',
         b: tRow.body.text,
         bSrc: p,
-        kind: 'conflict',
-      });
-    else if (mt.value !== lo || c[2] !== undefined)
-      entries.push({
-        body: id,
-        key: 'meanTemperature',
-        what: `Mean temperature vs "${tRow.label}" (°C)`,
-        a: mt.text,
-        aSrc: 'main table',
-        b: tRow.body.text,
-        bSrc: p,
-        kind: 'rounding',
+        kind: conflict ? 'conflict' : 'rounding',
       });
   }
 
-  // Kelvin and Celsius printed side by side on one line: C = K − 273.15, within their rounding.
+  // Within the body page: Kelvin and Celsius printed side by side on one line, C = K − 273.15 within
+  // their rounding. A range is one entry, whichever of its ends is off.
   for (const r of F.bodies[id].atmosphere ?? []) {
     const m = r.body.text.match(
-      /~?([\d.]+)(?:\s*-\s*([\d.]+))?\s*K\s*\(\s*~?(-?[\d.]+)(?:\s*-\s*(-?[\d.]+))?\s*C\s*\)/,
+      /(~?([\d.]+)(?:\s*-\s*([\d.]+))?)\s*K\s*\(\s*~?(-?[\d.]+)(?:\s*-\s*(-?[\d.]+))?\s*C\s*\)/,
     );
     if (!m) continue;
-    const pairs: [string, string][] = [[m[1]!, m[3]!]];
-    if (m[2] && m[4]) pairs.push([m[2], m[4]]);
-    for (const [k, cText] of pairs) {
+    const ends: [string, string][] = [[m[2]!, m[4]!]];
+    if (m[3] && m[5]) ends.push([m[3], m[5]]);
+    const off = ends.some(([k, cText]) => {
       const ik = interval(k, Number(k));
-      const ic = interval(cText, Number(cText));
-      if (!consistent([ik[0] - 273.15, ik[1] - 273.15], ic, false))
-        entries.push({
-          body: id,
-          key: 'meanTemperature',
-          what: `"${r.label}": ${k} K printed as ${cText} C`,
-          a: r.body.text,
-          aSrc: p,
-          b: `${(Number(k) - 273.15).toFixed(2)} C`,
-          bSrc: 'K − 273.15',
-          kind: 'conflict',
-        });
-    }
+      return !consistent([ik[0] - 273.15, ik[1] - 273.15], interval(cText, Number(cText)), false);
+    });
+    if (off)
+      entries.push({
+        body: id,
+        key: 'meanTemperature',
+        what: `“${r.label}”`,
+        a: `${m[1]} K printed as ${ends.map(([, cText]) => cText).join(' to ')} C`,
+        aSrc: p,
+        b: `${ends.map(([k]) => (Number(k) - 273.15).toFixed(2)).join(' to ')} C`,
+        bSrc: 'K − 273.15',
+        within: p,
+        kind: 'conflict',
+      });
   }
 
-  // Inside the main table: eccentricity against the printed perihelion and aphelion, with their
+  // Within the main table: eccentricity against the printed perihelion and aphelion, with their
   // rounding carried through e = (Q − q)/(Q + q).
   const qv = main(id, 'perihelion'),
     Qv = main(id, 'aphelion'),
@@ -320,24 +322,25 @@ for (const id of BODY_IDS) {
       entries.push({
         body: id,
         key: 'orbitalEccentricity',
-        what: 'Eccentricity vs (Q − q)/(Q + q) from the same table',
+        what: 'eccentricity vs perihelion and aphelion',
         a: e.text,
         aSrc: 'main table',
-        b: implied.toFixed(4),
-        bSrc: `main table q ${qv.text}, Q ${Qv.text}`,
+        b: `(${Qv.text} − ${qv.text})/(${Qv.text} + ${qv.text}) = ${implied.toFixed(4)}`,
+        bSrc: 'main table',
+        within: 'main table',
         kind: 'conflict',
-        note: 'The sheets draw the ellipse from q and Q and print e as listed.',
+        note: 'Planetary draws the ellipse from the perihelion and aphelion, and lists the eccentricity as NASA prints it.',
       });
   }
 
-  // Ring sheets: the Radius/Eq. radius column against km ÷ the sheet's own equator row.
+  // Within a ring sheet: the Radius/Eq. radius column against km ÷ the sheet's own equator row.
   const rs = F.bodies[id].rings;
-  if (rs) {
-    const eq = rs.rings.find((r) => /equator/i.test(r.name))?.radius.value;
-    const eqRow = rs.rings.find((x) => /equator/i.test(x.name));
+  const eqRow = rs?.rings.find((x) => /equator/i.test(x.name));
+  const eq = eqRow?.radius.value;
+  if (rs && eqRow && eq) {
+    const sheet = rs.url.split('/').pop()!;
     for (const r of rs.rings) {
-      if (!eq || !eqRow || r === eqRow || r.radius.value === null || r.ratio.value === null)
-        continue;
+      if (r === eqRow || r.radius.value === null || r.ratio.value === null) continue;
       const ir = interval(r.radius.text.replace(/^[~<>]+/, ''), r.radius.value),
         ie = interval(eqRow.radius.text, eq);
       const implied: [number, number] = [ir[0] / ie[1], ir[1] / ie[0]];
@@ -345,13 +348,14 @@ for (const id of BODY_IDS) {
         entries.push({
           body: id,
           key: 'ringSystem',
-          what: `Ring "${r.name}": radius/equatorial radius`,
-          a: r.ratio.text,
-          aSrc: rs.url.split('/').pop()!,
-          b: (r.radius.value / eq).toFixed(3),
-          bSrc: `${r.radius.text} km ÷ ${eqRow.radius.text} km`,
+          what: 'the Radius/Eq. radius column',
+          a: `${/^\d/.test(r.name) ? `Ring ${r.name}` : r.name} ${r.ratio.text}`,
+          aSrc: sheet,
+          b: `${r.radius.text} ÷ ${eqRow.radius.text} = ${(r.radius.value / eq).toFixed(decimals(r.ratio.text))}`,
+          bSrc: sheet,
+          within: sheet,
           kind: 'conflict',
-          note: 'The sheets draw rings from the km column.',
+          note: 'Planetary draws the rings from the km column.',
         });
     }
   }
@@ -359,12 +363,13 @@ for (const id of BODY_IDS) {
 
 const conflicts = entries.filter((e) => e.kind === 'conflict');
 const rounding = entries.filter((e) => e.kind === 'rounding');
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const table = (list: Entry[]) =>
-  ['| Body | Value | One page | Other page | Note |', '| --- | --- | --- | --- | --- |']
+  ['| Body | Value | Printed | Compared with | Note |', '| --- | --- | --- | --- | --- |']
     .concat(
       list.map(
         (e) =>
-          `| ${F.bodies[e.body].name} | ${e.what} | ${e.a} (${e.aSrc}) | ${e.b} (${e.bSrc}) | ${e.note ?? ''} |`,
+          `| ${F.bodies[e.body].name} | ${cap(e.what)} | ${e.a} (${e.aSrc}) | ${e.b} (${e.bSrc}) | ${e.note ?? ''} |`,
       ),
     )
     .join('\n');
@@ -378,8 +383,10 @@ NASA's fact sheets are curated by hand and updated page by page, so the main tab
 sometimes print different values for what looks like the same quantity. Some differences are only
 rounding; others come from different epochs or definitions (the main table's "Orbital Period" is the
 tropical period, its "Gravity" is the equatorial acceleration including rotation, and so on), and some
-are plain conflicts. The sheets never pick a winner: each value is shown where NASA prints it, and each
-drawing is sized by the value printed on it.
+are plain conflicts. A few pages also disagree with themselves: the ledger checks the main table's
+eccentricity against its perihelion and aphelion, Celsius against Kelvin where a page prints both, and
+each ring sheet's Radius/Eq. radius column against its radii in km. Planetary never picks a winner:
+each value is shown where NASA prints it, and each drawing is sized by the value printed on it.
 
 ## Conflicts (${conflicts.length})
 
@@ -390,10 +397,10 @@ ${table(conflicts)}
 ${table(rounding)}
 `;
 
-// The conflicts again for the sheets, which show each one in the popover of the row it concerns.
+// The conflicts again for the body pages, which show each one in the popover of the row it concerns.
 const json =
   JSON.stringify(
-    conflicts.map(({ body, key, what, a, aSrc, b, bSrc, note }): Discrepancy => ({
+    conflicts.map(({ body, key, what, a, aSrc, b, bSrc, within, note }): Discrepancy => ({
       body,
       key,
       what,
@@ -401,6 +408,7 @@ const json =
       aSrc,
       b,
       bSrc,
+      ...(within ? { within } : {}),
       ...(note ? { note } : {}),
     })),
     null,
