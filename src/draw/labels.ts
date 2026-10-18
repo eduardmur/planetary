@@ -48,6 +48,9 @@ export interface LabelReq {
   reach?: number[];
   /** When nothing is clear at all, interrupt the lines under the label rather than letter over them. */
   mask?: boolean;
+  /** Over or under its anchor, the label may slide sideways, as far as keeps it over the anchor, to
+   *  stay inside the drawing. */
+  slide?: boolean;
 }
 
 export interface AlongOpts {
@@ -502,7 +505,11 @@ export class LabelPlacer {
   /** The box a label would take at one spot, `k` times its gap from the anchor. */
   boxFor(r: LabelReq, spot: Spot, k = 1): Box {
     const { w, h } = textBox(r.text, r.size ?? 'm');
-    return boxAt(r.x, r.y, w, h, (r.gap ?? 6) * k, spot);
+    const box = boxAt(r.x, r.y, w, h, (r.gap ?? 6) * k, spot);
+    if (!r.slide || (spot !== 't' && spot !== 'b')) return box;
+    const over = Math.max(0, this.bounds.x0 - box.x0) - Math.max(0, box.x1 - this.bounds.x1);
+    const by = Math.max(1 - w / 2, Math.min(w / 2 - 1, over));
+    return { ...box, x0: box.x0 + by, x1: box.x1 + by };
   }
 
   /**
@@ -534,6 +541,15 @@ export class LabelPlacer {
           }
       return false;
     });
+  }
+
+  /** Like placeAny(), but where none of the places is fit (see unfit()), the label stands further
+   *  off on a leader before it takes an unfit one. */
+  placeFurther(dl: DrawList, reqs: LabelReq[]): Placed {
+    return this.placeFirst(dl, [
+      reqs,
+      reqs.map((r) => ({ ...r, reach: r.reach ? [6, 8, 10] : [2, 3] })),
+    ]);
   }
 
   /** Like placeAny(), over groups of requests in order of preference: the first group with a fit
