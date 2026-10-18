@@ -334,15 +334,22 @@ function drawKeyPlan(id: BodyId, size: Size, key: string | null): Drawn {
 const report = (hits: Hit[]) =>
   hits.map((h) => `“${h.label}” [${h.ref}] × ${h.what} through=${h.through} d=${h.d}`);
 
-/** Each state of one view of one body at one size, with what collides in it. */
+/** Each state of one view of one body at one size, with what collides in it and what lettering
+ *  falls outside the drawing. */
 function sweep(view: 'A' | 'P', id: BodyId, size: Size): string[] {
   const out: string[] = [];
   const keys = drawnRows(id)
     .filter((r) => r.shape.includes(view))
     .map((r) => r.key);
+  const { w, h } = SIZES[size][view === 'A' ? 'a' : 'p'];
   for (const key of [null, ...keys]) {
     const { rec } = view === 'A' ? drawViewA(id, size, key) : drawKeyPlan(id, size, key);
     for (const line of report(collisionsOf(rec))) out.push(`${key ?? 'idle'}: ${line}`);
+    for (const l of rec.labels) {
+      const b = boxOf(l.strokes.flat());
+      if (b.x0 < 0 || b.y0 < 0 || b.x1 > w || b.y1 > h)
+        out.push(`${key ?? 'idle'}: “${l.text}” runs out of the drawing`);
+    }
   }
   return out;
 }

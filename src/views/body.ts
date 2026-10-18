@@ -1055,7 +1055,7 @@ export class BodyView extends View {
       labels.line(g.arc);
       // The tilt at its arc, as the obliquity is at its own (on a leader if it must stand off), else
       // by the dipole's end there; where that side is crowded, at the dipole's other end, as a note
-      // on it.
+      // on it; on a drawing too small for any of these, in a corner, as a general note.
       const mid = g.arc[Math.round((g.arc.length - 1) / 2)]!;
       const tilt = (a: Vec2): LabelReq => ({
         x: a[0],
@@ -1069,7 +1069,7 @@ export class BodyView extends View {
       // Other values keep a wider berth from it, so that it never reads as one with them.
       const before = labels.mark();
       for (const b of labels.placed) labels.obstacles.push(grow(b, 6));
-      labels.placeFirst(dl, [[tilt(mid)], [tilt(g.a)], [tilt(g.end)]]);
+      labels.placeFirst(dl, [[tilt(mid)], [tilt(g.a)], [tilt(g.end)], corners(d.label, 'm')]);
       labels.drop(before);
       anchors.push(g.a, g.end);
     }
