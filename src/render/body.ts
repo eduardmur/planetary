@@ -68,7 +68,7 @@ function tabs(id: BodyId, ctx: PageCtx): string {
   // Sized exactly as src/main.ts letters it, so nothing moves when the lettering arrives.
   const w = measure('PLANETARY') * CAP.l + 4;
   const h = Math.ceil(CAP.l * 1.5);
-  // ‹ › show where the strip hides tabs, and scroll it for a mouse (src/ui/sheet.ts).
+  // ‹ › show where the strip hides tabs, and scroll it for a mouse (src/ui/body.ts).
   const more = (dir: number, glyph: string) =>
     `<span class="more" data-dir="${dir}" aria-hidden="true">${glyph}</span>`;
   return `<header class="tabs">
@@ -292,9 +292,9 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
       ? [`${out(earth.url, 'Earth fact sheet')} ${isoDate(earth.lastUpdated)} (Earth’s orbit)`]
       : []),
     [
-      out(NOTES_MAIN, 'planetfact_notes.html'),
-      out(NOTES_RATIO, 'planetfact_ratio_notes.html'),
-      out(NOTES_SHEET, 'fact_notes.html'),
+      `${out(NOTES_MAIN, 'planetfact_notes.html')} ${isoDate(FACTS.definitions.pages.main.lastUpdated)}`,
+      `${out(NOTES_RATIO, 'planetfact_ratio_notes.html')} ${isoDate(FACTS.definitions.pages.ratio.lastUpdated)}`,
+      `${out(NOTES_SHEET, 'fact_notes.html')} ${isoDate(FACTS.definitions.pages.sheet.lastUpdated)}`,
     ].join(' · '),
     `Retrieved <span class="nowrap">${FACTS.retrieved.slice(0, 10)}</span>`,
   ];
@@ -328,7 +328,7 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
       <h3>Sources</h3>
       <ul class="sources">${sources.map(li).join('')}</ul>
       <h3>Data and code</h3>
-      <p><a href="${ctx.base}data/factsheet.json">JSON</a> · <a href="${ctx.base}data/factsheet-main.csv">CSV</a> · ${out(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree (${conflicts} for ${esc(named(id))})`)} · ${out(ctx.repo, 'Source code')}</p>
+      <p><a href="${ctx.base}data/factsheet.json">JSON</a> · <a href="${ctx.base}data/factsheet-main.csv">CSV</a> · ${out(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree (${conflicts ? `${conflicts} conflict${conflicts === 1 ? '' : 's'}` : 'no conflicts'} for ${esc(named(id))})`)} · ${out(ctx.repo, 'Source code')}</p>
       <p class="title-line">${title}</p>
       <p class="status">Planetary · Unofficial — not a NASA product · not affiliated with or endorsed by NASA</p>`;
 }

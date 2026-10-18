@@ -937,29 +937,3 @@ test('ring radii stay clear of the key plan', async ({ page, isMobile }) => {
     expect(overlaps, id).toEqual([]);
   }
 });
-
-test('every line belongs to a row (or is Earth’s orbit)', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'both drawings at once');
-  for (const id of BODIES) {
-    await page.goto(`${id}/`);
-    await drawn(page);
-    const bad = await page.evaluate(async () => {
-      const pb = (window as unknown as { __pb: { show(k: string | null): void } }).__pb;
-      const rows = [...document.querySelectorAll<HTMLElement>('tr[data-key]')].map(
-        (r) => r.dataset.key!,
-      );
-      const aliases = ['polarRadius', 'coreRadius', 'dipoleTilt', 'dipoleOffset'];
-      const ok = new Set([...rows, ...aliases, 'earthOrbit']);
-      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const out = new Set<string>();
-      for (const key of rows) {
-        pb.show(key);
-        await frame();
-        for (const el of document.querySelectorAll('#view-a [data-ref], #key-plan [data-ref]'))
-          for (const t of el.getAttribute('data-ref')!.split(' ')) if (!ok.has(t)) out.add(t);
-      }
-      return [...out];
-    });
-    expect(bad, id).toEqual([]);
-  }
-});

@@ -103,7 +103,6 @@ describe('the ring popovers account for every row of NASA’s ring sheets', () =
       const m = bodyModel(id).rings!;
       const geometry = (e: { r: number; text: string; line: string }) => [e.r, e.text, e.line];
       expect(ringList(id)!.drawn.map(geometry)).toEqual(m.edges.map(geometry));
-      expect(m.notDrawn).toEqual(ringList(id)!.beyond);
     }
   });
 });

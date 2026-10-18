@@ -49,7 +49,11 @@ const server = spawn(
 );
 const stop = () => server.kill();
 process.on('exit', stop);
+// With --strictPort the server exits if the port is taken; never capture from someone else's server.
+let exited = false;
+server.on('exit', () => (exited = true));
 for (let i = 0; ; i++) {
+  if (exited) throw new Error(`port ${port} is in use: free it and run the media again`);
   try {
     if ((await fetch(base)).ok) break;
   } catch {

@@ -113,7 +113,7 @@
     border-color: var(--ink);
   }
 }
-@media (max-width: 860px) {
+@media (max-width: 860px), (max-height: 500px) {
   /* Room for the date and Pause on its right: on the narrowest phones the caption takes two lines. */
   .sheet-home .bl {
     max-width: calc(100% - 154px);
@@ -284,6 +284,10 @@ html:not(.js) .orrery {
 .sheet-home .noscript {
   position: static;
   margin: 0 0 20px;
+}
+/* Not in <noscript>: it also shows when scripts run but the page's script failed to load. */
+html.js .sheet-home .noscript {
+  display: none;
 }
 html:not(.js) .orrery .bodies ol {
   display: grid;

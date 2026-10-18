@@ -1,6 +1,7 @@
 // What every static page has: its sources, working meta tags, the "?" dialog, valid page data, and
 // the new name throughout.
 
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { SHEETS } from '../../src/content/sheets.ts';
 import { BODY_IDS } from '../../src/data/types.ts';
@@ -41,6 +42,16 @@ describe('pages', () => {
       expect(JSON.parse(json).sheet).toBe(sheet.id);
     });
   }
+
+  it('public/og has exactly one card per sheet', () => {
+    expect(readdirSync('public/og').sort()).toEqual(SHEETS.map((s) => `${s.id}.png`).sort());
+  });
+
+  it('every image the README shows exists', () => {
+    const shown = [...readFileSync('README.md', 'utf8').matchAll(/\]\((docs\/media\/[^)]+)\)/g)];
+    expect(shown.length).toBeGreaterThan(0);
+    for (const [, path] of shown) expect(existsSync(path!), path).toBe(true);
+  });
 
   it('the 404 page links home under the new name', () => {
     const html = render404(ctx.base);

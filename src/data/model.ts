@@ -188,7 +188,7 @@ function rings(id: BodyId): BodyModel['rings'] {
     inner: ringRadius(ringRow(id, a).radius, 'inner').r,
     outer: ringRadius(ringRow(id, b).radius, 'outer').r,
   }));
-  return { edges, opaque, notDrawn: list.beyond };
+  return { edges, opaque };
 }
 
 // ---- Magnetic dipole ---------------------------------------------------------------------------

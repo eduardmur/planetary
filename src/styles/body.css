@@ -83,7 +83,7 @@ html:has(.sheet-body) {
   display: flex;
 }
 /* The strip scrolls sideways when the window is too narrow for it, faded on the side where it hides
-   tabs (src/ui/sheet.ts sets data-more on the nav). */
+   tabs (src/ui/body.ts sets data-more on the nav). */
 .sheet-body .tabs .strip {
   display: flex;
   margin: 0;
@@ -539,7 +539,7 @@ html:not(.js) .sheet-body .tabs .strip {
   bottom: auto;
   max-height: calc(100% - 8px - var(--clear));
 }
-/* With the script, the popover is placed from its row and the table (src/ui/sheet.ts), on the
+/* With the script, the popover is placed from its row and the table (src/ui/body.ts), on the
    roomier side, alike in every engine. */
 .sheet-body .def[data-side] {
   position-area: none;

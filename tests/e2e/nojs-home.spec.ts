@@ -34,3 +34,13 @@ test('without JavaScript the home page lists the ten bodies', async ({ page }) =
   ]);
   expect(sw).toBeLessThanOrEqual(iw);
 });
+
+test('without JavaScript the home page opens at the top, with the notes not focused', async ({
+  page,
+}) => {
+  await page.goto('');
+  expect(await page.evaluate(() => scrollY)).toBe(0);
+  await expect(page.locator('#info-title')).not.toBeFocused();
+  // The line about pointing at planets needs the drawing, so it is left out.
+  await expect(page.locator('dialog#info .js-only')).toBeHidden();
+});

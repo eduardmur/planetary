@@ -13,9 +13,12 @@ import {
   infoButton,
   infoDialog,
   isoDate,
+  titleLine,
   type PageCtx,
   type Rendered,
 } from './common.ts';
+
+const notesPages = FACTS.definitions.pages;
 
 /** How the schematic is drawn, in drafting voice. */
 function notes(m: OrreryModel): string[] {
@@ -30,16 +33,11 @@ function notes(m: OrreryModel): string[] {
   ];
 }
 
-/** A title block on one line that breaks only after a "·", never inside an item. */
-function titleLine(items: string[]): string {
-  return items.map((s) => `<span class="nowrap">${s}</span>`).join('&nbsp;· ');
-}
-
 function about(sheet: Sheet, ctx: PageCtx, m: OrreryModel): string {
   const link = (href: string, text: string) => `<a href="${href}">${text}</a>`;
   const n = DISCREPANCIES.length;
   return `<p>NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>
-      <p>Point at a planet for its name; click it to open its sheet. On a phone, tap it.</p>
+      <p class="js-only">Point at a planet for its name; click it to open its sheet. On a phone, tap it.</p>
       <h3>This drawing</h3>
       <ol class="drafting">${notes(m)
         .map((n) => `<li>${esc(n)}</li>`)
@@ -48,7 +46,7 @@ function about(sheet: Sheet, ctx: PageCtx, m: OrreryModel): string {
       <ul>
         <li>${link(FACTS.main.url, 'NSSDCA Planetary Fact Sheet ↗')} (Last Updated ${isoDate(FACTS.main.lastUpdated)})</li>
         <li>The body and ring fact sheets (dated on each body’s sheet)</li>
-        <li>${link(NOTES_MAIN, 'planetfact_notes.html ↗')} · ${link(NOTES_RATIO, 'planetfact_ratio_notes.html ↗')} · ${link(NOTES_SHEET, 'fact_notes.html ↗')}</li>
+        <li>${link(NOTES_MAIN, 'planetfact_notes.html ↗')} ${isoDate(notesPages.main.lastUpdated)} · ${link(NOTES_RATIO, 'planetfact_ratio_notes.html ↗')} ${isoDate(notesPages.ratio.lastUpdated)} · ${link(NOTES_SHEET, 'fact_notes.html ↗')} ${isoDate(notesPages.sheet.lastUpdated)}</li>
         <li>Retrieved <span class="nowrap">${FACTS.retrieved.slice(0, 10)}</span></li>
       </ul>
       <h3>Data and code</h3>
@@ -70,7 +68,7 @@ export function homeSheet(sheet: Sheet, ctx: PageCtx): Rendered {
     </header>
     ${infoButton()}
     <div class="orrery">
-      <noscript><p class="noscript">The drawing needs JavaScript. Every body’s sheet is linked below.</p></noscript>
+      <p class="noscript">The drawing needs JavaScript. Every body’s sheet is linked below.</p>
       <svg class="drawing" id="orrery" role="img" aria-label="Schematic of the solar system, not to scale: the planets move on their orbits at 1 minute = 1 year, from today’s positions."></svg>
       <nav class="bodies" aria-label="Bodies"><ol>${links}</ol></nav>
     </div>

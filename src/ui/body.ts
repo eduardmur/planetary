@@ -33,7 +33,7 @@ const docked = () => portrait.matches || !CSS.supports('anchor-name: --a');
  *  the most room. */
 const short = matchMedia('(max-height: 500px)');
 
-export function initSheet(data: PageData) {
+export function initBody(data: PageData) {
   // Positions are for today; a capture may fix the day (?capture&date=YYYY-MM-DD).
   const fixed = capture ? Date.parse(`${params.get('date')}T00:00:00Z`) : NaN;
   const day = Number.isNaN(fixed) ? epoch : new Date(fixed);

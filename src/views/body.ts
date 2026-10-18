@@ -95,8 +95,6 @@ export interface BodyModel {
     edges: RingEdge[];
     /** Opaque bands (km) that hide the body behind them. */
     opaque: { inner: number; outer: number }[];
-    /** NASA ring rows outside the drawn edges, as "name radius" text, for the sheet's notes. */
-    notDrawn: string[];
   };
   /** Magnetic dipole: drawn on demand. tilt null = coincides with the axis. */
   dipole?: { tilt: number | null; label: string; note?: string };

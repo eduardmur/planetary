@@ -11,7 +11,7 @@ import { DrawList, SvgScene } from './draw/svg.ts';
 import type { PageData } from './render/page.ts';
 import { capture, expose, params, spinners } from './ui/env.ts';
 import { initHome } from './ui/home.ts';
-import { initSheet } from './ui/sheet.ts';
+import { initBody } from './ui/body.ts';
 import { reducedMotion } from './views/view.ts';
 
 const data = JSON.parse(document.getElementById('page-data')!.textContent!) as PageData;
@@ -88,7 +88,7 @@ if (!('closedBy' in HTMLDialogElement.prototype)) {
 // ---- Page script -----------------------------------------------------------------------------------
 
 if (data.sheet === 'home') initHome(data);
-else initSheet(data);
+else initBody(data);
 // The page is set up: it keeps its layout for the script (see JS_CLASS in src/render/page.ts).
 root.classList.add('live');
 
