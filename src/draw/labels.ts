@@ -67,6 +67,8 @@ interface Cand {
 
 /** A drawn line: labels keep `pad` px off it, and mind it by `w`. */
 interface Seg {
+  /** Its place in the order lines were registered (see Mark). */
+  i: number;
   a: Vec2;
   b: Vec2;
   pad: number;
@@ -191,7 +193,7 @@ export class LabelPlacer {
       const a: Vec2 = [pts[i - 1]![0], pts[i - 1]![1]],
         b: Vec2 = [pts[i]![0], pts[i]![1]];
       const k = this.lines.length;
-      this.lines.push({ a, b, pad, w, live: true });
+      this.lines.push({ i: k, a, b, pad, w, live: true });
       const cx0 = Math.floor((Math.min(a[0], b[0]) - pad) / CELL),
         cx1 = Math.floor((Math.max(a[0], b[0]) + pad) / CELL),
         cy0 = Math.floor((Math.min(a[1], b[1]) - pad) / CELL),
@@ -250,8 +252,7 @@ export class LabelPlacer {
       return true;
     const at = { x0: p[0], y0: p[1], x1: p[0], y1: p[1] };
     return this.near(at).some((s) => {
-      const k = this.lines.indexOf(s);
-      if (except && k >= except[0].lines && k < except[1].lines) return false;
+      if (except && s.i >= except[0].lines && s.i < except[1].lines) return false;
       return clipLength(s.a, s.b, p[0] - s.pad, p[1] - s.pad, p[0] + s.pad, p[1] + s.pad) > 0;
     });
   }

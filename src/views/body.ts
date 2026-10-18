@@ -401,8 +401,8 @@ export class BodyView extends View {
           ringInk.push(px);
         }
       }
-      // Labels may cross a ring only where nothing else is free (coarse samples keep it cheap).
-      for (const r of ringPx) labels.line(r, 2.5, 10);
+      // Labels keep off the rings where they can.
+      for (const r of ringPx) labels.line(r);
     }
 
     // Which way the negative pole points on screen: the diameter dimension goes on that side.
@@ -616,21 +616,19 @@ export class BodyView extends View {
       // Along the line where it is clear, else beyond either end of it, on an extension of the line
       // (the rings may leave no room between the extension lines).
       const value = isoNumber(m.polarText);
+      const w = textBox(value).w;
       const len = len2(sub2(a2, a1));
-      const out = (textBox(value).w / 2 + 6) / len;
-      const v = labels.placeAlong(dl, a1, a2, value, {
+      const out = (w / 2 + 6) / len;
+      const { t } = labels.placeAlong(dl, a1, a2, value, {
         ref,
         at: [...spreadAlong(a1, a2, value, ARROW.len + 3), 1 + out, -out],
       });
       const u = unit2(sub2(a2, a1));
-      const reach = (v.t - 0.5) * len + (Math.sign(v.t - 0.5) * textBox(value).w) / 2;
+      /** The point `d` px along the line from a1. */
+      const along = (d: number): Vec2 => [a1[0] + u[0] * d, a1[1] + u[1] * d];
       const ends: [Vec2, Vec2] = [a1, a2];
-      if (v.t > 1)
-        ends[1] = [a1[0] + u[0] * (len / 2 + reach + 2), a1[1] + u[1] * (len / 2 + reach + 2)];
-      if (v.t < 0)
-        ends[0] = [a1[0] + u[0] * (len / 2 + reach - 2), a1[1] + u[1] * (len / 2 + reach - 2)];
-      if (v.t > 1) dl.line(a2, ends[1], 'dim', ref);
-      if (v.t < 0) dl.line(ends[0], a1, 'dim', ref);
+      if (t > 1) dl.line(a2, (ends[1] = along(t * len + w / 2 + 2)), 'dim', ref);
+      if (t < 0) dl.line((ends[0] = along(t * len - w / 2 - 2)), a1, 'dim', ref);
       labels.line(ends);
     }
 
