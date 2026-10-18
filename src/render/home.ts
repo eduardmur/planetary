@@ -22,16 +22,22 @@ function notes(m: OrreryModel): string[] {
   return [
     'SCHEMATIC, NOT TO SCALE. SEEN FROM 30–60° ABOVE THE ECLIPTIC (THE ANGLE FITS THE WINDOW), ♈︎ TO THE RIGHT.',
     `DISTANCES FROM THE SUN COMPRESSED: A POINT AT r (10⁶ km) IS DRAWN AT R·(r / ${m.qMaxText})^${RADIAL_POWER}, WHERE ${m.qMaxText} IS PLUTO’S APHELION AND R FITS THE WINDOW. DIRECTIONS AND INCLINATIONS ARE TRUE; ORBIT SPACING AND SHAPES ARE NOT.`,
-    `BODIES ARE SYMBOLS: Ø ∝ √(NASA DIAMETER), AT LEAST ${MIN_SYMBOL} px. AXES POINT TO NASA’S POLE OF ROTATION (POSITIVE POLE, RIGHT-HAND RULE).`,
+    `BODIES ARE SYMBOLS: SYMBOL DIAMETER GROWS AS THE SQUARE ROOT OF NASA’S DIAMETER, AT LEAST ${MIN_SYMBOL} px. AXES POINT TO NASA’S POLE OF ROTATION (POSITIVE POLE, RIGHT-HAND RULE).`,
     'THE RING ROUND THE EARTH IS THE MOON’S ORBIT, ENLARGED, IN THE ECLIPTIC PLANE. NASA GIVES NO NODE OR PERIGEE LONGITUDE FOR THE MOON: ORIENTATION ARBITRARY, NO POSITION SHOWN.',
-    'ORBITS FROM NASA’S MAIN-TABLE PERIHELION AND APHELION. ORIENTATION AND POSITIONS FROM THE J2000 MEAN ELEMENTS (TWO-BODY): WITHIN 0.5° OF JPL HORIZONS 1990–2060, 0.3° FOR ALL BUT MERCURY.',
+    'ORBITS FROM NASA’S MAIN-TABLE PERIHELION, APHELION AND INCLINATION; NODE, PERIHELION DIRECTION AND POSITIONS FROM THE J2000 MEAN ELEMENTS (TWO-BODY): WITHIN 0.5° OF JPL HORIZONS 1990–2060, 0.3° FOR ALL BUT MERCURY.',
     'TIME: TODAY 00:00 UTC, RUNNING AT 1 MIN = 1 YEAR (365.25 d). AT 2060 THE CLOCK RETURNS TO TODAY. POINTING AT A BODY STOPS IT.',
     'NASA: “THE VALUES LISTED ON THE FACTSHEETS ARE NOT ‘OFFICIAL’ VALUES … CARE SHOULD BE EXERCISED WHEN USING THESE VALUES.”',
   ];
 }
 
+/** A title block on one line that breaks only after a "·", never inside an item. */
+function titleLine(items: string[]): string {
+  return items.map((s) => `<span class="nowrap">${s}</span>`).join('&nbsp;· ');
+}
+
 function about(sheet: Sheet, ctx: PageCtx, m: OrreryModel): string {
   const link = (href: string, text: string) => `<a href="${href}">${text}</a>`;
+  const n = DISCREPANCIES.length;
   return `<p>NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>
       <p>Point at a planet for its name; click it to open its sheet. On a phone, tap it.</p>
       <h3>This drawing</h3>
@@ -46,8 +52,8 @@ function about(sheet: Sheet, ctx: PageCtx, m: OrreryModel): string {
         <li>Retrieved <span class="nowrap">${FACTS.retrieved.slice(0, 10)}</span></li>
       </ul>
       <h3>Data and code</h3>
-      <p>${link(`${ctx.base}data/factsheet.json`, 'factsheet.json')} · ${link(`${ctx.base}data/factsheet-main.csv`, 'factsheet-main.csv')} · ${link(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree (${DISCREPANCIES.length}) ↗`)} · ${link(ctx.repo, 'Source code ↗')}</p>
-      <p class="label">${sheet.dwg} · SHEET ${sheet.number} / ${SHEET_COUNT} · ${esc(sheet.title.toUpperCase())} · ${esc(sheet.docType)} · ISSUED <span class="nowrap">${ctx.issued}</span></p>`;
+      <p>${link(`${ctx.base}data/factsheet.json`, 'factsheet.json')} · ${link(`${ctx.base}data/factsheet-main.csv`, 'factsheet-main.csv')} · ${link(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree (${n} conflict${n === 1 ? '' : 's'}) ↗`)} · ${link(ctx.repo, 'Source code ↗')}</p>
+      <p class="label">${titleLine([sheet.dwg, `SHEET ${sheet.number} / ${SHEET_COUNT}`, esc(sheet.title.toUpperCase()), esc(sheet.docType), `ISSUED ${ctx.issued}`])}</p>`;
 }
 
 export function homeSheet(sheet: Sheet, ctx: PageCtx): Rendered {

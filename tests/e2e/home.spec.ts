@@ -1,7 +1,7 @@
 // The home page: a moving schematic whose bodies are links. Pointing at one names it and stops the
 // clock; a click, a tap or Enter opens its page; on a phone a tap among several opens a chooser.
 
-import { expect, test, type Page } from '@playwright/test';
+import { devices, expect, test, type Page } from '@playwright/test';
 
 /** The hooks the view exposes as window.__pb.views.orrery. */
 type Hooks = {
@@ -13,10 +13,24 @@ type Hooks = {
         setDate(iso: string): void;
         positions(): Record<string, [number, number]>;
         glyphRadii(): Record<string, number>;
+        within(x: number, y: number): string[];
       };
     };
   };
 };
+
+/** The nine bodies that have a symbol, in NASA's order. */
+const PLANETS = [
+  'mercury',
+  'venus',
+  'earth',
+  'mars',
+  'jupiter',
+  'saturn',
+  'uranus',
+  'neptune',
+  'pluto',
+];
 
 const simDate = (page: Page) =>
   page.evaluate(() => (window as unknown as Hooks).__pb.views.orrery.simDate);
@@ -73,26 +87,129 @@ test('the clock runs at 1 minute = 1 year', async ({ page }) => {
   expect(days(a, b)).toBeLessThan(9);
 });
 
-test('the links over the bodies never overlap', async ({ page }) => {
-  await page.goto('');
-  for (const date of ['2026-10-18', '2030-03-01', '2035-07-15', '2041-01-01', '2052-09-30']) {
-    const circles = await page.evaluate((date) => {
-      (window as unknown as Hooks).__pb.views.orrery.setDate(date);
-      return [
+test('every point of a symbol opens its own body; no two links overlap or shrink under 24 px', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto('?capture&date=2026-10-18');
+  // Venus and the Earth close (2026-10-18), Mercury over Venus (2027-04-04), Mercury and the Earth
+  // close (2027-06-24), and other dates.
+  for (const date of [
+    '2026-10-18',
+    '2027-04-04',
+    '2027-06-24',
+    '2030-03-01',
+    '2035-07-15',
+    '2041-01-01',
+    '2052-09-30',
+  ]) {
+    const r = await page.evaluate((date) => {
+      const o = (window as unknown as Hooks).__pb.views.orrery;
+      o.setDate(date);
+      const box = document.getElementById('orrery')!.getBoundingClientRect();
+      const pos = o.positions(),
+        rad = o.glyphRadii();
+      const ids = Object.keys(pos);
+      const wrong: string[] = [];
+      let shared = 0;
+      for (const id of ids)
+        for (const f of [0.3, 0.6, 0.9])
+          for (let k = 0; k < 16; k++) {
+            const t = (k / 16) * 2 * Math.PI;
+            const x = pos[id]![0] + Math.cos(t) * f * rad[id]!,
+              y = pos[id]![1] + Math.sin(t) * f * rad[id]!;
+            // A point that two symbols cover may go to either.
+            if (
+              ids.some(
+                (j) => j !== id && Math.hypot(x - pos[j]![0], y - pos[j]![1]) < rad[j]! + 0.5,
+              )
+            )
+              continue;
+            const els = document.elementsFromPoint(box.x + x, box.y + y);
+            if (els[0]?.closest('.corner, button.info')) continue;
+            const links = els.map((e) => e.closest<HTMLElement>('a[data-body]')?.dataset.body);
+            if (new Set(links.filter((b) => b && b !== 'moon')).size > 1) shared++;
+            if (links[0] !== id) wrong.push(`${id} at ${f} r, ${k * 22.5}°: ${links[0]}`);
+          }
+      const sizes = [
         ...document.querySelectorAll<HTMLElement>('nav.bodies a:not([data-body="moon"])'),
-      ].map((a) => {
-        const r = a.getBoundingClientRect();
-        return { id: a.dataset.body, x: r.x + r.width / 2, y: r.y + r.height / 2, r: r.width / 2 };
-      });
+      ].flatMap((a) => [a.offsetWidth, a.offsetHeight]);
+      return { wrong, shared, smallest: Math.min(...sizes) };
     }, date);
-    for (const a of circles)
-      for (const b of circles)
-        if (a.id !== b.id)
-          expect(
-            Math.hypot(a.x - b.x, a.y - b.y),
-            `${a.id}/${b.id} ${date}`,
-          ).toBeGreaterThanOrEqual(a.r + b.r - 0.5);
+    expect(r.wrong, date).toEqual([]);
+    expect(r.shared, date).toBe(0);
+    expect(r.smallest, date).toBeGreaterThanOrEqual(24);
   }
+  if (isMobile) return;
+  // 1440×900: a click just outside the Earth's symbol, toward the Moon's ring, is still the Earth.
+  await page.evaluate(() => (window as unknown as Hooks).__pb.views.orrery.setDate('2026-10-18'));
+  const e = await at(page, 'earth');
+  expect(
+    await page.evaluate(
+      ({ x, y }) =>
+        document.elementFromPoint(x + 11, y)?.closest<HTMLElement>('a[data-body]')?.dataset.body,
+      e,
+    ),
+  ).toBe('earth');
+});
+
+test('a link cut where it meets another shows its whole focus ring', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(isMobile, 'keyboard');
+  // 1440×900 on 2026-10-18: the Earth's link is cut where it meets Venus's.
+  await page.goto('?capture&date=2026-10-18');
+  const earth = page.locator('a[data-body="earth"]');
+  expect(await earth.evaluate((a) => a.style.clipPath)).toMatch(/^polygon/);
+  await page.locator('a[data-body="venus"]').focus();
+  await page.keyboard.press(browserName === 'webkit' ? 'Alt+Tab' : 'Tab');
+  await expect(earth).toBeFocused();
+  expect(await earth.evaluate((a) => getComputedStyle(a).clipPath)).toBe('none');
+});
+
+test('at 2060 the clock goes back to today, fading the bodies out and in', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto('');
+  const faded = await page.evaluate(async () => {
+    const glyphs = document.querySelector('#orrery g.glyphs')!;
+    (window as unknown as Hooks).__pb.views.orrery.setDate('2059-12-31');
+    for (const t0 = performance.now(); performance.now() - t0 < 2000;) {
+      await new Promise(requestAnimationFrame);
+      if (glyphs.getAnimations().length) return true;
+    }
+    return false;
+  });
+  expect(faded).toBe(true);
+  await expect.poll(() => simDate(page), { timeout: 2000 }).toMatch(/^20[2-5]/);
+  // Back at today's date, and running from it.
+  const today = `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`;
+  const since = days(today, await simDate(page));
+  expect(since).toBeGreaterThanOrEqual(0);
+  expect(since).toBeLessThan(10);
+  expect(errors).toEqual([]);
+});
+
+test('with reduced motion the clock goes back at 2060 at once, without a fade', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('');
+  await page.locator('#pause').click(); // Play
+  const faded = await page.evaluate(async () => {
+    const glyphs = document.querySelector('#orrery g.glyphs')!;
+    (window as unknown as Hooks).__pb.views.orrery.setDate('2059-12-31');
+    let seen = false;
+    for (const t0 = performance.now(); performance.now() - t0 < 600;) {
+      await new Promise(requestAnimationFrame);
+      seen ||= glyphs.getAnimations().length > 0;
+    }
+    return seen;
+  });
+  expect(faded).toBe(false);
+  await expect.poll(() => simDate(page), { timeout: 2000 }).toMatch(/^20[2-5]/);
 });
 
 test('pointing at a body names it and stops the clock until the mouse leaves', async ({
@@ -112,8 +229,7 @@ test('pointing at a body names it and stops the clock until the mouse leaves', a
     .poll(() => page.locator('#orrery .layer-text-l path[d]:not([d=""])').count())
     .toBeGreaterThan(0);
   await expect(page.locator(':popover-open, dialog[open]')).toHaveCount(0);
-  // Stopped (it eases to a stop in 250 ms).
-  await page.waitForTimeout(400);
+  // Stopped at once, so the body stays under the pointer.
   const a = await simDate(page);
   await page.waitForTimeout(500);
   expect(await simDate(page)).toBe(a);
@@ -124,6 +240,72 @@ test('pointing at a body names it and stops the clock until the mouse leaves', a
   await expect(page.locator('#orrery')).not.toHaveAttribute('data-active');
   await expect(page.locator('#orrery [data-ref].hot')).toHaveCount(0);
   await expect(page.locator('#orrery .layer-text-l path[d]:not([d=""])')).toHaveCount(0);
+});
+
+test('a still mouse keeps a fast body it points at, and the click opens it', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'mouse');
+  // Mercury at its fastest on screen: 1920×1080, 2026-11-10. Its way, from a day later.
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto('');
+  const setDate = (iso: string) =>
+    page.evaluate((iso) => (window as unknown as Hooks).__pb.views.orrery.setDate(iso), iso);
+  await setDate('2026-11-11');
+  const b = await at(page, 'mercury');
+  await setDate('2026-11-10');
+  const a = await at(page, 'mercury');
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  expect(len).toBeGreaterThan(5);
+  // 7 px behind its centre, 5 px inside the trailing edge of its 12 px link.
+  const c = await at(page, 'mercury');
+  await page.mouse.move(c.x - ((b.x - a.x) / len) * 7, c.y - ((b.y - a.y) / len) * 7);
+  await page.waitForTimeout(600);
+  await expect(page.locator('#orrery')).toHaveAttribute('data-active', 'mercury');
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(page).toHaveURL(/\/mercury\/$/);
+});
+
+test('a name is lettered off its own orbit', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'mouse');
+  // 1440×900 on 2026-10-18: Pluto's orbit used to run through PLUTO.
+  await page.goto('?capture&date=2026-10-18');
+  const lettered = () =>
+    page.evaluate(
+      () => document.querySelector('#orrery > .layer-text-l path')?.getAttribute('d') ?? '',
+    );
+  for (const id of PLANETS) {
+    const before = await lettered();
+    const p = await at(page, id);
+    await page.mouse.move(p.x, p.y);
+    await expect(page.locator('#orrery')).toHaveAttribute('data-active', id);
+    // The next frame letters the name.
+    await expect.poll(lettered).not.toBe(before);
+    await expect.poll(lettered).not.toBe('');
+    const through = await page.evaluate((id) => {
+      const svg = document.getElementById('orrery')!;
+      const name = svg.querySelector<SVGPathElement>(':scope > .layer-text-l path[d]:not([d=""])')!;
+      const b = name.getBBox();
+      const d = svg.querySelector(`.orbits [data-ref="${id}"]`)!.getAttribute('d')!;
+      const pts = [...d.matchAll(/[ML]([-\d.]+) ([-\d.]+)/g)].map((m) => [+m[1]!, +m[2]!]);
+      // Length of orbit inside the name's box, px, every 0.5 px along it.
+      let inside = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = pts[i - 1]!,
+          [bx, by] = pts[i]!;
+        const n = Math.max(1, Math.ceil(Math.hypot(bx! - ax!, by! - ay!) / 0.5));
+        for (let k = 0; k < n; k++) {
+          const x = ax! + ((bx! - ax!) * k) / n,
+            y = ay! + ((by! - ay!) * k) / n;
+          if (x > b.x && x < b.x + b.width && y > b.y && y < b.y + b.height) inside += 0.5;
+        }
+      }
+      return inside;
+    }, id);
+    expect(through, id).toBe(0);
+  }
 });
 
 test('a click on a planet or on the Moon’s ring opens its page', async ({ page, isMobile }) => {
@@ -237,6 +419,149 @@ test('a tap among several bodies opens a chooser; a tap on one opens its page', 
   const jupiter = await at(page, 'jupiter');
   await page.touchscreen.tap(jupiter.x, jupiter.y);
   await expect(page).toHaveURL(/\/jupiter\/$/);
+});
+
+test('a finger held on a body sees its name clear of the fingertip', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(!isMobile, 'touch');
+  await page.goto('?capture&date=2026-10-18');
+  const name = page.locator('#orrery > .layer-text-l path[d]:not([d=""])');
+  // A real held touch where the browser allows one: Pluto, whose name used to fall under the finger.
+  if (browserName === 'chromium') {
+    const p = await at(page, 'pluto');
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: p.x, y: p.y }],
+    });
+    await expect(page.locator('#orrery')).toHaveAttribute('data-active', 'pluto');
+    expect((await name.boundingBox())!.y + (await name.boundingBox())!.height).toBeLessThanOrEqual(
+      p.y - 30,
+    );
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+    await expect(page.locator('#orrery')).not.toHaveAttribute('data-active');
+  }
+  // Every body alone within reach, pressed at its centre (the same pointerdown, from script): the
+  // name stays out of the 56 px square round the contact point.
+  const near = await page.evaluate(async () => {
+    const o = (window as unknown as Hooks).__pb.views.orrery;
+    const svg = document.getElementById('orrery')!;
+    const box = svg.getBoundingClientRect();
+    const lettered = () =>
+      svg.querySelector<SVGPathElement>(':scope > .layer-text-l path[d]:not([d=""])');
+    /** The name once the next frames have lettered it (or cleared it), within 2 s. */
+    const settle = async (want: boolean) => {
+      for (const t0 = performance.now(); performance.now() - t0 < 2000;) {
+        await new Promise(requestAnimationFrame);
+        if (!!lettered() === want) break;
+      }
+      return lettered();
+    };
+    const out: Record<string, number> = {};
+    for (const [id, [x, y]] of Object.entries(o.positions())) {
+      if (o.within(x, y).length !== 1) continue;
+      const press = (type: string) =>
+        svg.closest('.orrery')!.dispatchEvent(
+          new PointerEvent(type, {
+            pointerType: 'touch',
+            clientX: box.x + x,
+            clientY: box.y + y,
+            bubbles: true,
+          }),
+        );
+      press('pointerdown');
+      const r = (await settle(true))!.getBBox();
+      out[id] = Math.max(r.x - x, x - (r.x + r.width), r.y - y, y - (r.y + r.height));
+      press('pointercancel');
+      await settle(false);
+    }
+    return out;
+  });
+  expect(Object.keys(near).length).toBeGreaterThan(4);
+  for (const [id, d] of Object.entries(near)) expect(d, id).toBeGreaterThanOrEqual(28);
+});
+
+test('turning the phone closes the chooser', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'touch');
+  await page.goto('');
+  await page.evaluate(() => (window as unknown as Hooks).__pb.views.orrery.setDate('2026-10-18'));
+  const earth = await at(page, 'earth');
+  await page.touchscreen.tap(earth.x, earth.y);
+  const chooser = page.locator('.chooser:popover-open');
+  await expect(chooser).toBeVisible();
+  await page.setViewportSize({ width: 664, height: 390 });
+  await expect(chooser).toHaveCount(0);
+  // The candidates go dark and the clock runs again.
+  await expect(page.locator('#orrery [data-ref].hot')).toHaveCount(0);
+  const a = await simDate(page);
+  await page.waitForTimeout(800);
+  expect(days(a, await simDate(page))).toBeGreaterThan(0);
+});
+
+test('on a touch screen wider than 860 px, a tap just above Pause still toggles it', async ({
+  browser,
+  isMobile,
+}, testInfo) => {
+  test.skip(isMobile, 'once per engine, in a tablet of its own');
+  const {
+    viewport,
+    deviceScaleFactor,
+    isMobile: mobile,
+    hasTouch,
+    userAgent,
+  } = devices['iPad Mini landscape'];
+  const context = await browser.newContext({
+    viewport,
+    deviceScaleFactor,
+    isMobile: mobile,
+    hasTouch,
+    userAgent,
+    baseURL: testInfo.project.use.baseURL,
+  });
+  const page = await context.newPage();
+  await page.goto('');
+  const pause = page.locator('#pause');
+  await expect(pause).toHaveAttribute('data-paused', 'false');
+  const b = (await pause.boundingBox())!;
+  await page.touchscreen.tap(b.x + b.width / 2, b.y - 6);
+  await expect(pause).toHaveAttribute('data-paused', 'true');
+  await context.close();
+});
+
+test('in a contrast theme the Pause icon keeps its bars and its triangle', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(
+    !isMobile || browserName !== 'chromium',
+    'the icon is for phones; forced colours: Chromium',
+  );
+  await page.emulateMedia({ forcedColors: 'active' });
+  await page.goto('');
+  const icon = () =>
+    page.evaluate(() => {
+      const s = getComputedStyle(document.getElementById('pause')!, '::before');
+      return {
+        left: `${s.borderLeftStyle} ${s.borderLeftWidth}`,
+        right: `${s.borderRightStyle} ${s.borderRightWidth}`,
+        size: `${s.width} ${s.height}`,
+        fill: s.backgroundColor,
+        clip: s.clipPath,
+      };
+    });
+  // Two 3 px bars: the borders either side of a 3 px gap.
+  expect(await icon()).toMatchObject({ left: 'solid 3px', right: 'solid 3px', size: '3px 12px' });
+  await page.locator('#pause').click();
+  await expect(page.locator('#pause')).toHaveAttribute('data-paused', 'true');
+  // A filled triangle.
+  const play = await icon();
+  expect(play).toMatchObject({ left: 'none 0px', size: '11px 14px' });
+  expect(play.clip).toMatch(/^polygon/);
+  expect(play.fill).not.toMatch(/^rgba\(.*, 0\)$/);
 });
 
 test('with reduced motion the clock starts paused at today; Play and Pause work', async ({

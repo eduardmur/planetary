@@ -65,6 +65,18 @@
     inset: -8px;
   }
 }
+/* And 8 px round the text Pause on touch screens wider than 860 px (narrower ones get a 32 px icon):
+   an invisible ring, so nothing moves. */
+@media (pointer: coarse) and (min-width: 861px) {
+  .sheet-home #pause {
+    position: relative;
+  }
+  .sheet-home #pause::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
+}
 .sheet-home .bl,
 .sheet-home .br {
   bottom: 0;
@@ -142,6 +154,21 @@
     border-top: 7px solid transparent;
     border-bottom: 7px solid transparent;
   }
+  /* Contrast themes (forced colours) repaint backgrounds, drop shadows and fill transparent borders:
+     draw the bars as borders and the triangle as a clipped fill, in ButtonText. */
+  @media (forced-colors: active) {
+    .sheet-home #pause::before {
+      background: none;
+      border-inline: 3px solid ButtonText;
+    }
+    .sheet-home #pause[data-paused='true']::before {
+      width: 11px;
+      height: 14px;
+      border: 0;
+      background: ButtonText;
+      clip-path: polygon(0 0, 100% 50%, 0 100%);
+    }
+  }
 }
 
 /* ---- The drawing and its links ------------------------------------------------------------------ */
@@ -180,6 +207,10 @@
 }
 .js .orrery .bodies a[data-body='moon'] {
   z-index: 1;
+}
+/* A link cut where it meets another (OrreryView) shows its whole focus ring. */
+.js .orrery .bodies a:focus-visible {
+  clip-path: none !important;
 }
 /* With the script, names are lettered in the drawing and the text is for screen readers. */
 .js .orrery .bodies span,
