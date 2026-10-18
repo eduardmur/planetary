@@ -558,6 +558,48 @@ test('a finger held on a body sees its name clear of the fingertip', async ({
   for (const [id, d] of Object.entries(near)) expect(d, id).toBeGreaterThanOrEqual(28);
 });
 
+test('a name beside a finger, along its own orbit, interrupts the orbit', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'touch');
+  // 664×390 on 2033-06-23: Uranus at the top, nothing above the finger is clear, and its orbit runs
+  // beside the finger, where the name goes.
+  await page.setViewportSize({ width: 664, height: 390 });
+  await page.goto('?capture&date=2033-06-23');
+  const { named, masked } = await page.evaluate(async () => {
+    const svg = document.getElementById('orrery')!;
+    const box = svg.getBoundingClientRect();
+    const [x, y] = (window as unknown as Hooks).__pb.views.orrery.positions().uranus!;
+    svg.closest('.orrery')!.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerType: 'touch',
+        clientX: box.x + x,
+        clientY: box.y + y,
+        bubbles: true,
+      }),
+    );
+    const at = (layer: string) =>
+      svg.querySelector<SVGPathElement>(`:scope > .layer-${layer} path[d]:not([d=""])`)?.getBBox();
+    for (let i = 0; i < 60 && !at('text-l'); i++) await new Promise(requestAnimationFrame);
+    const name = at('text-l'),
+      mask = at('mask');
+    return {
+      named: !!name,
+      // The orbit gives way all round the letters.
+      masked:
+        !!name &&
+        !!mask &&
+        mask.x < name.x &&
+        mask.y < name.y &&
+        mask.x + mask.width > name.x + name.width &&
+        mask.y + mask.height > name.y + name.height,
+    };
+  });
+  expect(named).toBe(true);
+  expect(masked).toBe(true);
+});
+
 test('turning the phone closes the chooser', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'touch');
   await page.goto('');

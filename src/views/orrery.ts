@@ -502,7 +502,13 @@ export class OrreryView extends View {
           ...reqs.filter((r) => !meets(labels.boxFor(r, r.spots![0]!), tip)),
         ];
       }
-      labels.placeAny(dl, reqs);
+      const name = labels.placeAny(dl, reqs);
+      // Where the name under a finger still meets its orbit (near the top of a phone on its side
+      // nothing is clear), the orbit gives way 2 px round the letters, as lines do under the sheets'
+      // lettering. Not near a symbol, which stays whole: its pen reaches 2 px past its box.
+      const symbols = others.concat(shift(p.box, p.at));
+      if (this.touchAt && labels.onInk(name) > 0 && !symbols.some((o) => meets(o, grow(name, 4))))
+        labels.mask(dl, corners(name), 2);
     }
     this.scene.commit(dl);
   }
@@ -618,6 +624,20 @@ function union(a: Box, b: Box): Box {
 
 function shift(b: Box, d: Vec2): Box {
   return { x0: b.x0 + d[0], y0: b.y0 + d[1], x1: b.x1 + d[0], y1: b.y1 + d[1] };
+}
+
+function grow(b: Box, d: number): Box {
+  return { x0: b.x0 - d, y0: b.y0 - d, x1: b.x1 + d, y1: b.y1 + d };
+}
+
+/** A box's corners, clockwise from the top left. */
+function corners(b: Box): Vec2[] {
+  return [
+    [b.x0, b.y0],
+    [b.x1, b.y0],
+    [b.x1, b.y1],
+    [b.x0, b.y1],
+  ];
 }
 
 /** Whether two boxes overlap (touching is not overlapping). */
