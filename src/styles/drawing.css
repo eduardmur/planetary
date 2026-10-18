@@ -143,3 +143,8 @@
 .drawing.clip {
   overflow: hidden;
 }
+/* Paper-coloured patches that interrupt the lines under a label with nowhere clear to go. */
+.layer-mask .ln {
+  fill: var(--paper);
+  stroke: none;
+}
