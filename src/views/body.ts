@@ -160,6 +160,9 @@ export class BodyView extends View {
   private keepTurn = false;
   /** The view's description as the page gives it, graphic scale and all. */
   private readonly label = this.svg.getAttribute('aria-label') ?? '';
+  /** Where the last frame's labels went, for the frames that follow to letter them there again
+   *  (see draw()). */
+  private lettered: { key: string; kept: unknown[] } | null = null;
 
   constructor(svg: SVGSVGElement, m: BodyModel) {
     super(svg, BODY_HOME, { turntable: true });
@@ -409,9 +412,15 @@ export class BodyView extends View {
 
     const bounds = { x0: 4, y0: 4, x1: this.w - 4, y1: this.h - 4 };
     const obstacles: Box[] = [];
+    const inset = this.clearInset ? this.inset : null;
     // The key plan over View A's corner: no label may stand on it.
-    if (this.clearInset && this.inset) obstacles.push({ ...this.inset, hard: true });
-    const labels = new LabelPlacer(bounds, obstacles);
+    if (inset) obstacles.push({ ...inset, hard: true });
+    // The body spins under its lettering, and nothing the labels go by turns with it: while the
+    // view, its size and its focus stay as they are, each frame letters them where the first did.
+    const view = [this.w, this.h, this.k, this.ox, this.oy, cam.yaw, cam.pitch, inset, this.focus];
+    const key = JSON.stringify(view);
+    if (this.lettered?.key !== key) this.lettered = { key, kept: [] };
+    const labels = new LabelPlacer(bounds, obstacles, this.lettered.kept);
     // The body: its outline, which no mask interrupts, and its disc in thin strips, so that labels
     // keep off it but may come as close to the outline as to any other line (its bounding box would
     // keep them off its corners).
@@ -1209,23 +1218,23 @@ export class BodyView extends View {
     for (const b of labels.placed) labels.obstacles.push({ ...grow(b, 6), soft: true });
     labels.obstacles.push({ ...bbox([this.px(scale(axis, L.axisPos))], 16), soft: true });
     const after = labels.mark();
-    /** What the tilt's best fit place at the arc of one geometry costs (Infinity where it has none). */
-    const priceAt = (h: Dipole) => {
+    /** Whether the tilt has a fit place at the arc of one geometry. */
+    const fitsAt = (h: Dipole) => {
       const m0 = labels.mark();
       keepOff(h);
-      const p = labels.price(atArc(h.arc, [2, 3, 4, 6, 8, 10]));
+      const fits = labels.fits(atArc(h.arc, [2, 3, 4, 6, 8, 10]));
       labels.drop(m0);
-      return p;
+      return fits;
     };
     // Where the negative pole leaves the dipole or its tilt no room, the arc goes beyond the spin
     // arrow, if it keeps clear of every label there and its value fits by it; the dipole's negative
     // end may then draw in as far as the outline.
-    if (!clear(g) || priceAt(g) === Infinity) {
+    if (!clear(g) || !fitsAt(g)) {
       let up = this.dipoleGeometry(axis, L, onDimSide, r, neg, true)!;
       let n = neg;
       while (n > L.c + step && room([c0, up.a]) < 3)
         up = this.dipoleGeometry(axis, L, onDimSide, r, (n -= step), true)!;
-      if (clear(up) && priceAt(up) < Infinity) g = up;
+      if (clear(up) && fitsAt(up)) g = up;
     }
     keepOff(g);
     const at = labels.placed.length;

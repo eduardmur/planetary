@@ -201,10 +201,27 @@ export class LabelPlacer {
   private readonly cells = new Map<number, number[]>();
   private readonly seen: number[] = [];
   private query = 0;
+  /** What the searches found when this same picture was last lettered, in order (see recall()). */
+  private readonly kept: unknown[] | null;
+  private recalled = 0;
 
-  constructor(bounds: Box, obstacles: Box[] = []) {
+  /** `kept`: the searches of an earlier frame of the same picture, to take again (empty to begin). */
+  constructor(bounds: Box, obstacles: Box[] = [], kept: unknown[] | null = null) {
     this.bounds = bounds;
     this.obstacles = obstacles;
+    this.kept = kept;
+  }
+
+  /** What a search finds: where an earlier frame of the same picture made it, what it found then (a
+   *  spinning body is lettered many times a second, and nothing its labels go by moves); else found
+   *  now, and kept for the next frame. */
+  private recall<T>(search: () => T): T {
+    if (!this.kept) return search();
+    if (this.recalled < this.kept.length) return this.kept[this.recalled++] as T;
+    const found = search();
+    this.kept.push(found);
+    this.recalled++;
+    return found;
   }
 
   /** Reserve an area so later labels avoid it. */
@@ -440,8 +457,8 @@ export class LabelPlacer {
   }
 
   /** What a leader from a to b would cross: lines, obstacles and labels, past its first few
-   *  pixels. */
-  leaderCost(a: Vec2, b: Vec2): number {
+   *  pixels; once that comes to `limit`, the rest goes uncounted. */
+  leaderCost(a: Vec2, b: Vec2, limit = Infinity): number {
     const from = past(a, b);
     if (!from) return 0;
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -454,7 +471,15 @@ export class LabelPlacer {
     let cost = 0;
     // Lines it crosses: the part of the leader within each line's band.
     for (const s of this.near(grow(box, 4))) {
-      if (segSegDist(from, b, s.a, s.b) > s.pad) continue;
+      if (cost >= limit) return cost;
+      if (
+        Math.min(s.a[0], s.b[0]) - s.pad > box.x1 ||
+        Math.max(s.a[0], s.b[0]) + s.pad < box.x0 ||
+        Math.min(s.a[1], s.b[1]) - s.pad > box.y1 ||
+        Math.max(s.a[1], s.b[1]) + s.pad < box.y0 ||
+        segSegDist(from, b, s.a, s.b) > s.pad
+      )
+        continue;
       const n = Math.max(1, Math.ceil(len / 2));
       for (let i = 0; i <= n; i++) {
         const p: Vec2 = [
@@ -465,6 +490,7 @@ export class LabelPlacer {
           cost += 2 * s.pad * s.w;
       }
     }
+    if (cost >= limit) return cost;
     for (const o of this.obstacles)
       cost += clipLength(from, b, o.x0, o.y0, o.x1, o.y1) * 2 * (o.w ?? 1);
     // Labels, with a mask's width round them: a leader that grazes one reads as part of it.
@@ -495,56 +521,73 @@ export class LabelPlacer {
     return c.bad ? null : this.commit(dl, c);
   }
 
-  /** What placeAny() would pay for a label at its best fit place (see unfit()): Infinity where it
-   *  has none. */
-  price(reqs: LabelReq[]): number {
-    const c = this.pick(reqs);
-    return c.bad ? Infinity : c.cost;
+  /** Whether placeAny() would find a fit place for a label (see unfit()): the first one will do. */
+  fits(reqs: LabelReq[]): boolean {
+    return this.recall(() => {
+      for (const r of reqs)
+        for (const k of [1, ...(r.reach ?? [])])
+          for (const spot of r.spots ?? SPOTS) {
+            const box = this.boxFor(r, spot, k);
+            const leader = k > 1 ? leaderTo([r.x, r.y], box) : undefined;
+            // Priced as if it sat on something: a place that sits on nothing is fit all the same.
+            if (!this.unfit({ r, box, cost: 1, leader })) return true;
+          }
+      return false;
+    });
   }
 
   /** Like placeAny(), over groups of requests in order of preference: the first group with a fit
    *  place has its best one (over a mask or on a leader if need be; see unfit()); failing all, the
    *  cheapest place of any (the earlier group on a tie). */
   placeFirst(dl: DrawList, groups: LabelReq[][]): Placed {
+    // A group with no fit place is passed over without pricing its places, unless all are.
+    for (const g of groups) if (this.fits(g)) return this.commit(dl, this.pick(g));
     let best: Cand | null = null;
     for (const g of groups) {
       const c = this.pick(g);
       if (better(c, best)) best = c;
-      if (!c.bad) break;
     }
     return this.commit(dl, best!);
   }
 
   private pick(reqs: LabelReq[]): Cand {
-    let best: Cand | null = null;
-    const take = (c: Cand) => {
-      // No dearer place can beat a fit one, whatever it is.
-      if (best && !best.bad && c.cost >= best.cost - 1e-6) return false;
-      c.bad = this.unfit(c);
-      if (better(c, best)) best = c;
-      return best!.cost === 0;
-    };
-    search: {
-      for (const r of reqs)
-        for (const spot of r.spots ?? SPOTS) {
-          const box = this.boxFor(r, spot);
-          if (take({ r, box, cost: this.cost(box) })) break search;
-        }
-      const ks = [...new Set(reqs.flatMap((r) => r.reach ?? []))].sort((a, b) => a - b);
-      for (const k of ks)
-        for (const r of reqs) {
-          if (!r.reach?.includes(k)) continue;
+    return this.recall(() => {
+      let best: Cand | null = null;
+      // No dearer place can beat a fit one, whatever it is: how much more than `cost` a place may
+      // cost and still beat the best so far.
+      const left = (cost: number) => (best && !best.bad ? best.cost - 1e-6 - cost : Infinity);
+      const take = (c: Cand) => {
+        if (left(c.cost) <= 0) return false;
+        c.bad = this.unfit(c);
+        if (better(c, best)) best = c;
+        return best!.cost === 0;
+      };
+      search: {
+        for (const r of reqs)
           for (const spot of r.spots ?? SPOTS) {
-            const box = this.boxFor(r, spot, k);
-            const leader = leaderTo([r.x, r.y], box);
-            const cost = this.cost(box) + this.leaderCost(...leader);
-            if (take({ r, box, cost, leader })) break search;
+            const box = this.boxFor(r, spot);
+            if (take({ r, box, cost: this.cost(box) })) break search;
           }
-        }
-    }
-    const c = best as Cand | null;
-    if (!c) throw new Error('placeAny: nothing to place');
-    return c;
+        const ks = [...new Set(reqs.flatMap((r) => r.reach ?? []))].sort((a, b) => a - b);
+        for (const k of ks)
+          for (const r of reqs) {
+            if (!r.reach?.includes(k)) continue;
+            for (const spot of r.spots ?? SPOTS) {
+              const box = this.boxFor(r, spot, k);
+              // A leader only adds to what its label sits on: it is priced only as far as the
+              // place can still beat the best.
+              const cost = this.cost(box);
+              if (left(cost) <= 0) continue;
+              const leader = leaderTo([r.x, r.y], box);
+              const all = cost + this.leaderCost(leader[0], leader[1], left(cost));
+              if (take({ r, box, cost: all, leader })) break search;
+            }
+          }
+      }
+      const c = best as Cand | null;
+      if (!c) throw new Error('placeAny: nothing to place');
+      return c;
+    });
   }
 
   private commit(dl: DrawList, c: Cand): Placed {
@@ -585,32 +628,34 @@ export class LabelPlacer {
     text: string,
     o: AlongOpts = {},
   ): { mid: Vec2; t: number; cost: number; ink: number; bad: boolean } {
-    const size = o.size ?? 'm';
-    const dir: Vec2 = [q2[0] - q1[0], q2[1] - q1[1]];
-    const { ang, up, lift } = dimTurn(dir, size);
-    const raise = text.startsWith('(') ? 1.5 : 0;
-    const w = measure(text) * CAP[size];
-    let best: { mid: Vec2; t: number; cost: number; ink: number; bad: boolean } | null = null;
-    for (const t of o.at ?? ALONG) {
-      const mid: Vec2 = [q1[0] + dir[0] * t + up[0] * raise, q1[1] + dir[1] * t + up[1] * raise];
-      const c: Vec2 = [mid[0] + up[0] * lift, mid[1] + up[1] * lift];
-      const cost = this.costTurned(c[0], c[1], ang, w, CAP[size]);
-      if (best && !best.bad && cost >= best.cost - 1e-6) continue;
-      const ink = cost > 0 ? this.onInkTurned(c[0], c[1], ang, w, CAP[size]) : 0;
-      // Between the value and its own line no mask reaches: another line there, or along its own,
-      // would graze it.
-      const strip = { x0: -w / 2, y0: CAP[size] / 2, x1: w / 2, y1: lift + raise + 1 };
-      const bad =
-        cost > 0 &&
-        (this.crowds(turnedBox(c[0], c[1], ang, w, CAP[size], 0)) ||
-          this.crosses(c, ang, strip) ||
-          (ink > 0 &&
-            o.mask !== false &&
-            this.hardUnder(c, ang, valueMask(text, size, lift + raise)).length > 0));
-      if (better({ cost, bad }, best)) best = { mid, t, cost, ink, bad };
-      if (cost === 0) break;
-    }
-    return best!;
+    return this.recall(() => {
+      const size = o.size ?? 'm';
+      const dir: Vec2 = [q2[0] - q1[0], q2[1] - q1[1]];
+      const { ang, up, lift } = dimTurn(dir, size);
+      const raise = text.startsWith('(') ? 1.5 : 0;
+      const w = measure(text) * CAP[size];
+      let best: { mid: Vec2; t: number; cost: number; ink: number; bad: boolean } | null = null;
+      for (const t of o.at ?? ALONG) {
+        const mid: Vec2 = [q1[0] + dir[0] * t + up[0] * raise, q1[1] + dir[1] * t + up[1] * raise];
+        const c: Vec2 = [mid[0] + up[0] * lift, mid[1] + up[1] * lift];
+        const cost = this.costTurned(c[0], c[1], ang, w, CAP[size]);
+        if (best && !best.bad && cost >= best.cost - 1e-6) continue;
+        const ink = cost > 0 ? this.onInkTurned(c[0], c[1], ang, w, CAP[size]) : 0;
+        // Between the value and its own line no mask reaches: another line there, or along its
+        // own, would graze it.
+        const strip = { x0: -w / 2, y0: CAP[size] / 2, x1: w / 2, y1: lift + raise + 1 };
+        const bad =
+          cost > 0 &&
+          (this.crowds(turnedBox(c[0], c[1], ang, w, CAP[size], 0)) ||
+            this.crosses(c, ang, strip) ||
+            (ink > 0 &&
+              o.mask !== false &&
+              this.hardUnder(c, ang, valueMask(text, size, lift + raise)).length > 0));
+        if (better({ cost, bad }, best)) best = { mid, t, cost, ink, bad };
+        if (cost === 0) break;
+      }
+      return best!;
+    });
   }
 
   /** Letter a dimension value where along() puts it; if nowhere is clear, the lines under it give
