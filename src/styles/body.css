@@ -3,13 +3,15 @@
 
 /* Set on the root, which scrolls: the sticky header, the sticky block above the table (phones in
    portrait add View A to it), a row height at which all 20 rows fit at 1280 × 720, and the widest
-   the table and its docked sheet get on a tablet held upright. */
+   the table and its docked sheet get on a tablet held upright. A row brought into sight stays
+   under the sticky block and above a phone's home indicator. */
 html:has(.sheet-body) {
   --tabs-h: 44px;
   --sticky-h: var(--tabs-h);
   --row-h: clamp(24px, (100svh - 145px) / 20, 32px);
   --sheet-w: 440px;
   scroll-padding-top: var(--sticky-h);
+  scroll-padding-bottom: env(safe-area-inset-bottom);
 }
 
 .sheet-body {

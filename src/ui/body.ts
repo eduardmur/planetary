@@ -96,27 +96,28 @@ export function initBody(data: PageData) {
     if (capture) a.clock = captureClock;
     // The caption says where the reader has turned View A.
     a.onTurned = () => captions(current);
-    focusables.push(a, p, {
-      // Phones show one drawing at a time: the key plan while an orbit row is selected.
-      setFocus(key) {
-        if (!phone.matches || !views) return;
-        const shape = shapeOf(key);
-        if (shape.includes('P')) showPlan(true);
-        else if (shape.includes('A')) showPlan(false);
-      },
-    });
+    focusables.push(a, p, { setFocus: swap });
     spinners.push(a);
     exposeViews({ a, p });
   }
 
+  /** Phones show one drawing at a time: the key plan while an orbit row is selected, View A while
+   *  a row it draws is. */
+  function swap(key: string | null) {
+    if (!phone.matches || !views) return;
+    const shape = shapeOf(key);
+    if (shape.includes('P')) showPlan(true);
+    else if (shape.includes('A')) showPlan(false);
+  }
   function showPlan(on: boolean) {
     if (!views || views.classList.contains('show-plan') === on) return;
     views.classList.toggle('show-plan', on);
-    // Keep keyboard focus on the toggle that is now visible.
+    // Keep keyboard focus on the toggle that is now visible. It is in sight already, in the sticky
+    // drawing; Chromium would still scroll the table to it.
     const visible = document.querySelector<HTMLButtonElement>(
       `figcaption .swap[data-show="${on ? 'a' : 'plan'}"]`,
     );
-    if (document.activeElement?.classList.contains('swap')) visible?.focus();
+    if (document.activeElement?.classList.contains('swap')) visible?.focus({ preventScroll: true });
   }
   for (const b of document.querySelectorAll<HTMLButtonElement>('figcaption .swap'))
     b.addEventListener('click', () => showPlan(b.dataset.show === 'plan'));
@@ -159,6 +160,9 @@ export function initBody(data: PageData) {
   };
 
   let current: string | null = null;
+  // A tablet turned (or a window narrowed) into the one-drawing layout shows the drawing the
+  // selected row needs.
+  phone.addEventListener('change', () => swap(current));
   /** Set by select() around the toggle it causes: the views turn at once (deep links). */
   let instant = false;
   /** The same, kept for the open popover's toggle event, which comes after select() returns. */
@@ -464,13 +468,20 @@ export function initBody(data: PageData) {
   }
 
   const viewAEl = svg('view-a');
-  /** The selection before the last click on a drawing. */
+  /** The selection before the last click on a drawing, and where the page was scrolled then. */
   let beforeClick: string | null = null;
+  let beforeY = 0;
   /** A double-click or a double tap on View A resets the view and leaves the selection as it was
-   *  before its first click. */
+   *  before its first click, and the table where it was (on a phone that click's row has scrolled
+   *  it). */
   const keepSelection = () => {
     clearTimeout(closing);
-    if (current !== beforeClick) select(beforeClick);
+    if (current === beforeClick) return;
+    select(beforeClick);
+    // Again a frame later: Chromium adds the next step of a smooth scroll in flight to the first.
+    const back = () => scrollTo({ top: beforeY, behavior: 'instant' });
+    back();
+    requestAnimationFrame(back);
   };
   frame?.addEventListener(
     'dblclick',
@@ -492,7 +503,10 @@ export function initBody(data: PageData) {
         keepSelection();
         return;
       }
-      if (e.detail <= 1) beforeClick = current;
+      if (e.detail <= 1) {
+        beforeClick = current;
+        beforeY = scrollY;
+      }
       // Not after a drag, and not the second click of a double-click (which resets View A).
       if (drawing.dataset.dragged === '1' || e.detail > 1) return;
       // A line selects its row, or lets go of it when it is the selected one; blank paper deselects.
@@ -664,18 +678,29 @@ export function initBody(data: PageData) {
   }
 
   // Turning the phone: the current tab and the selected row come back into sight, and the popover
-  // takes its new place. Not on every resize: phones resize as their toolbars slide away while the
-  // page scrolls, and that must not pull the page back to the row.
-  matchMedia('(orientation: portrait)').addEventListener('change', () =>
+  // takes its new place; once more after the resize that follows (or 200 ms on), during which WebKit
+  // may scroll the page by itself. Not on every resize: phones resize as their toolbars slide away
+  // while the page scrolls, and that must not pull the page back to the row.
+  const inSight = () => {
+    if (!current) return;
+    place();
+    reveal(current, true);
+    place();
+  };
+  matchMedia('(orientation: portrait)').addEventListener('change', () => {
     requestAnimationFrame(() => {
       centre();
       if (!docked()) setTail(0);
-      if (!current) return;
-      place();
-      reveal(current, true);
-      place();
-    }),
-  );
+      inSight();
+    });
+    const again = () => {
+      clearTimeout(late);
+      removeEventListener('resize', again);
+      requestAnimationFrame(inSight);
+    };
+    const late = setTimeout(again, 200);
+    addEventListener('resize', again);
+  });
 
   expose({ show: (key: string | null) => select(key) });
 }
