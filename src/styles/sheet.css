@@ -253,16 +253,17 @@ html.has-scrollbar:has(dialog[open]) {
     margin: 0;
     border: 0;
   }
-  /* Clear of the notch and the rounded corners. */
+  /* Clear of the notch and the rounded corners; on a wide screen the text keeps to a column the
+     width of the modal, so its lines stay readable. */
   .info-dialog:modal header {
     padding-top: calc(6px + env(safe-area-inset-top));
-    padding-right: max(8px, env(safe-area-inset-right));
-    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right), calc(50% - 280px));
+    padding-left: max(16px, env(safe-area-inset-left), calc(50% - 280px));
   }
   .info-dialog:modal .info-body {
-    padding-right: max(16px, env(safe-area-inset-right));
+    padding-right: max(16px, env(safe-area-inset-right), calc(50% - 280px));
     padding-bottom: calc(18px + env(safe-area-inset-bottom));
-    padding-left: max(16px, env(safe-area-inset-left));
+    padding-left: max(16px, env(safe-area-inset-left), calc(50% - 280px));
   }
 }
 @media (pointer: coarse) {

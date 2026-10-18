@@ -197,7 +197,7 @@ test('dragging View A keeps the selection; its caption says where the view is', 
   test.skip(isMobile, 'mouse drag');
   await page.goto('saturn/#obliquity');
   await drawn(page);
-  await expect(caption(page)).toHaveText('Orbit plane edge-on · tilt true size');
+  await expect(caption(page)).toHaveText('Tilt true size · orbit plane edge-on');
   const view = page.locator('#view-a');
   const a = await rect(view);
   const y = (a.top + a.bottom) / 2;
@@ -216,7 +216,7 @@ test('dragging View A keeps the selection; its caption says where the view is', 
   // Home goes back to the view that shows the tilt at true size, as a double-click does.
   await view.focus();
   await page.keyboard.press('Home');
-  await expect(caption(page)).toHaveText('Orbit plane edge-on · tilt true size');
+  await expect(caption(page)).toHaveText('Tilt true size · orbit plane edge-on');
   await expect.poll(async () => Math.abs((await camera(page)).yaw)).toBeLessThan(1e-6);
   // ← turns it again; Esc lets go of the row and keeps the reader's turn, back above the plane.
   for (let i = 0; i < 9; i++) await page.keyboard.press('ArrowLeft');

@@ -67,7 +67,7 @@
 }
 /* And 8 px round the text Pause on touch screens wider than 860 px (narrower ones get a 32 px icon):
    an invisible ring, so nothing moves. */
-@media (pointer: coarse) and (min-width: 861px) {
+@media (pointer: coarse) and (min-width: 861px) and (min-height: 501px) {
   .sheet-home #pause {
     position: relative;
   }

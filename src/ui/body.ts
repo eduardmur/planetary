@@ -229,7 +229,37 @@ export function initBody(data: PageData) {
   const stepper = document.querySelector<HTMLElement>('.steps');
   const table = document.querySelector<HTMLTableElement>('table.main');
   const PLACED = ['top', 'bottom', 'left', 'width', 'max-height', 'min-height', 'clip-path'];
+  /** The room a popover has: under the header (on the desktop layout, under the row stepper) and
+   *  above the foot of the frame, or of the screen (above the home indicator) where the frame runs
+   *  on below it. */
+  function bounds() {
+    const head = header?.getBoundingClientRect().bottom ?? 0;
+    const ceiling = shown(stepper) ? Math.max(head, stepper!.getBoundingClientRect().bottom) : head;
+    const frameFoot = frame?.getBoundingClientRect().bottom ?? Infinity;
+    const safe = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
+    const floor = frameFoot <= innerHeight - safe ? frameFoot - 4 : innerHeight - safe;
+    return { head, ceiling, floor };
+  }
+  /** The stepper rides on the caption line and stays under the header once the table has scrolled
+   *  up under it, so the rows can be stepped through without moving the pointer. */
+  /** Laid out at all (the stepper is only on the desktop layout); a fixed element has no
+   *  offsetParent, so that cannot tell. */
+  const shown = (el: Element | null) => !!el && el.getClientRects().length > 0;
+  function placeStepper(head: number) {
+    if (!stepper || !schedule) return;
+    if (!current || !shown(stepper)) {
+      for (const k of ['position', 'top', 'right']) stepper.style.removeProperty(k);
+      return;
+    }
+    // Where its CSS puts it on the caption line (4 px down, 8 px in from the column's right edge),
+    // but on the screen, and never under the header.
+    const sc = schedule.getBoundingClientRect();
+    stepper.style.position = 'fixed';
+    stepper.style.top = `${Math.max(head + 2, sc.top + 4)}px`;
+    stepper.style.right = `${root.clientWidth - sc.right + 8}px`;
+  }
   function place() {
+    placeStepper(header?.getBoundingClientRect().bottom ?? 0);
     if (!current) return;
     const { row, def } = parts.get(current)!;
     if (docked()) {
@@ -238,12 +268,7 @@ export function initBody(data: PageData) {
     }
     const r = row.getBoundingClientRect();
     const t = table!.getBoundingClientRect();
-    const head = header?.getBoundingClientRect().bottom ?? 0;
-    const ceiling = stepper?.offsetParent
-      ? Math.max(head, stepper.getBoundingClientRect().bottom)
-      : head;
-    const frameFoot = frame?.getBoundingClientRect().bottom ?? Infinity;
-    const floor = frameFoot <= innerHeight ? frameFoot - 4 : innerHeight;
+    const { head, ceiling, floor } = bounds();
     const pin = pinned?.key === current && performance.now() < pinned.until ? pinned.side : null;
     const side = pin ?? (r.top - ceiling > floor - r.bottom ? 'above' : 'below');
     if (def.dataset.side !== side) def.dataset.side = side;
@@ -268,22 +293,30 @@ export function initBody(data: PageData) {
   const legend = document.querySelector<HTMLElement>('.sheet-body .legend');
   function fit() {
     if (!current) return;
-    const { def } = parts.get(current)!;
+    const { row, def } = parts.get(current)!;
     def.style.minHeight = '';
     if (docked() || !isOpen(def)) return;
     const d = def.getBoundingClientRect();
-    const mh = parseFloat(def.style.maxHeight);
-    const room = Number.isNaN(mh) ? Infinity : mh;
+    const { ceiling, floor } = bounds();
     const tops = rowEls.map((r) => r.getBoundingClientRect().top);
+    const cap = caption?.getBoundingClientRect().top ?? -Infinity;
+    const leg = legend?.getBoundingClientRect();
+    // Less than a line of text left between the popover and the end of its room reads as a misprint:
+    // then the popover runs on to the end of the room instead.
+    const LINE = 18;
     if (def.dataset.side === 'above') {
-      const stops = [(caption?.getBoundingClientRect().top ?? -Infinity) - 3, ...tops];
-      const y = stops.findLast((s) => s <= d.top + 0.5);
-      if (y !== undefined && d.bottom - y <= room) def.style.minHeight = `${d.bottom - y}px`;
+      // Rules above the popover's natural top, in order down the page: the legend's (where it comes
+      // before the table, on phones), the caption's, then the rows'.
+      const stops = [...(leg && leg.top < cap ? [leg.top - 3] : []), cap - 3, ...tops];
+      let y = stops.findLast((v) => v <= d.top + 0.5 && v >= ceiling);
+      if (y === undefined || y - ceiling < LINE) y = ceiling;
+      def.style.minHeight = `${d.bottom - y}px`;
     } else {
+      const top = row.getBoundingClientRect().bottom + 4;
       const last = rowEls.at(-1)!.getBoundingClientRect().bottom;
-      const stops = [...tops, last, (legend?.getBoundingClientRect().bottom ?? Infinity) + 3];
-      const y = stops.find((s) => s >= d.bottom - 0.5);
-      if (y !== undefined && y - d.top <= room) def.style.minHeight = `${y - d.top}px`;
+      const stops = [...tops, last, ...(leg && leg.top > last ? [leg.bottom + 3] : [])];
+      const y = stops.find((v) => v >= d.bottom - 0.5 && v <= floor) ?? floor;
+      def.style.minHeight = `${y - top}px`;
     }
   }
 
@@ -322,7 +355,16 @@ export function initBody(data: PageData) {
     const wait = lastWrite + 150 - performance.now();
     if (wait <= 0) write();
     else pending = window.setTimeout(write, wait);
+    flush = write;
   }
+  /** Write a pending hash now, before the page is left (Back must come back to the right row). */
+  let flush: (() => void) | null = null;
+  const flushHash = () => {
+    if (pending === undefined) return;
+    clearTimeout(pending);
+    pending = undefined;
+    flush?.();
+  };
 
   /** Bring the page in line with the selection: rows, views, captions, the tabs and the URL. */
   function sync(key: string | null) {
@@ -346,7 +388,10 @@ export function initBody(data: PageData) {
       // A docked sheet is revealed from its toggle event, once it has its height.
       if (!docked()) reveal(key);
       place();
-    } else trim();
+    } else {
+      trim();
+      placeStepper(0);
+    }
     writeHash();
   }
 
@@ -486,7 +531,7 @@ export function initBody(data: PageData) {
       if (document.querySelector('dialog[open]') || !current) return;
       const p = parts.get(current)!;
       const at = document.activeElement;
-      const back = !at || at === document.body || p.def.contains(at);
+      const back = !at || at === document.body || p.def.contains(at) || !!stepper?.contains(at);
       select(null);
       if (back) p.button.focus();
       return;
@@ -507,6 +552,7 @@ export function initBody(data: PageData) {
     if ((e.target as Element).closest('svg.drawing, .def, dialog, input, textarea, select')) return;
     const i = tabs.findIndex((t) => t.getAttribute('aria-current') === 'page');
     if (i < 0) return;
+    flushHash();
     location.assign(tabs[(i + step) % n]!.href);
   });
 
@@ -583,6 +629,21 @@ export function initBody(data: PageData) {
       },
       { passive: false },
     );
+    // A tab that takes keyboard focus comes out from under the faded edges.
+    strip.addEventListener('focusin', (e) => {
+      const st = strip.getBoundingClientRect(),
+        r = (e.target as Element).getBoundingClientRect(),
+        pad = 32;
+      const d =
+        r.left < st.left + pad
+          ? r.left - st.left - pad
+          : r.right > st.right - pad
+            ? r.right - st.right + pad
+            : 0;
+      if (d) strip.scrollBy({ left: d, behavior: 'instant' });
+    });
+    // A click on a tab right after a selection takes the selected row along in the address too.
+    for (const t of tabs) t.addEventListener('click', flushHash, true);
     for (const m of nav?.querySelectorAll<HTMLElement>('.more') ?? [])
       m.addEventListener('click', () =>
         strip.scrollBy({

@@ -22,6 +22,9 @@ export interface Box {
   w?: number;
   /** Obstacles only: a place to leave free where possible, not ink; it never calls for a mask. */
   soft?: boolean;
+  /** Obstacles only: a mark (a dot, an arrowhead) that a label must not hide, so must not mask:
+   *  it is avoided at almost any cost. */
+  hard?: boolean;
 }
 
 /** A placed label's box, and what it sits on (0: nothing). */
@@ -273,7 +276,8 @@ export class LabelPlacer {
   onInk(box: Box, soft = false): number {
     let cost = 0;
     const ink = grow(box, 1);
-    for (const o of this.obstacles) if (soft || !o.soft) cost += overlap(ink, o) * (o.w ?? 1);
+    for (const o of this.obstacles)
+      if (soft || !o.soft) cost += overlap(ink, o) * (o.w ?? 1) * (o.hard ? 100 : 1);
     for (const s of this.near(ink)) cost += bandIn(s, ink);
     return cost;
   }

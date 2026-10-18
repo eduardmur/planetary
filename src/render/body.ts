@@ -152,11 +152,14 @@ function alsoDrawn(id: BodyId, key: string): string {
             `<div><dt>${esc(ringName(e.name))}</dt><dd>${esc(e.text)}</dd><dd>${LINE[e.line]}</dd></div>`,
         )
         .join('');
-      const notDrawn = (lead: string, rows: string[]) =>
-        rows.length ? `<p>${lead}: ${rows.map(esc).join(' · ')}.</p>` : '';
+      const lists = [
+        list.omitted.length ? `Not drawn: ${list.omitted.map(esc).join(' · ')}.` : '',
+        list.beyond.length ? `Not drawn at this scale: ${list.beyond.map(esc).join(' · ')}.` : '',
+      ].filter(Boolean);
+      const notes = rings.notes.length ? `<p class="n">${rings.notes.map(esc).join(' ')}</p>` : '';
       return section(
         `${esc(page.name)} rings fact sheet <time>${isoDate(rings.lastUpdated)}</time>`,
-        `<p class="k">Ring edges drawn <span class="unit">(km)</span></p><dl class="edges">${edges}</dl>${notDrawn('Not drawn', list.omitted)}${notDrawn('Not drawn at this scale', list.beyond)}<p>Wide = opaque rings, narrow = fainter, phantom = optical depth under about 0.01.</p>${rings.notes.map((n) => `<p class="n">${esc(n)}</p>`).join('')}`,
+        `<p class="k">Ring edges drawn <span class="unit">(km)</span></p><dl class="edges">${edges}</dl>${lists.length ? `<p>${lists.join(' ')}</p>` : ''}<p>Wide = opaque rings, narrow = fainter, phantom = optical depth under about 0.01.</p>${notes}`,
       );
     }
     case 'magneticField': {
@@ -203,7 +206,7 @@ const conflict = (d: Discrepancy, i: number, list: Discrepancy[]): string => {
   if (together(list[i - 1])) return ''; // already in the paragraph before
   let end = i + 1;
   while (together(list[end])) end++;
-  const src = (s: string) => (s === d.within ? '' : ` (${esc(s)})`);
+  const src = (s: string) => (s === d.within ? '' : ` <span class="nowrap">(${esc(s)})</span>`);
   // A value never breaks inside itself; a worked one may break before its result.
   const whole = (v: string) =>
     v
@@ -274,7 +277,7 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
     'EACH LINE IS SIZED BY THE VALUE PRINTED ON IT. ( ) = REFERENCE DIMENSION; A WORKED-OUT VALUE SHOWS ITS FORMULA.',
     'AXIS DRAWN TO THE POSITIVE POLE (+, RIGHT-HAND RULE). SPIN SHOWN AT 1 s = 1 h. ROTATION PHASE ARBITRARY.',
     plan.j2000
-      ? 'ORBIT ORIENTATION AND POSITIONS FROM NASA’S J2000 MEAN ELEMENTS (TWO-BODY): WITHIN 0.5° OF JPL HORIZONS 1990–2060, 0.3° FOR ALL BUT MERCURY.'
+      ? 'ORBIT FROM NASA’S MAIN-TABLE PERIHELION, APHELION AND INCLINATION; NODE, PERIHELION DIRECTION AND POSITIONS FROM THE J2000 MEAN ELEMENTS (TWO-BODY): WITHIN 0.5° OF JPL HORIZONS 1990–2060, 0.3° FOR ALL BUT MERCURY.'
       : 'ORBIT ABOUT THE EARTH FROM NASA’S MAIN-TABLE PERIGEE AND APOGEE. NASA GIVES NO NODE OR PERIGEE LONGITUDE FOR THE MOON: ORIENTATION ARBITRARY, NO POSITION SHOWN.',
     plan.j2000
       ? 'KEY PLAN: SUN, BODY AND MOTION ARROW ARE SYMBOLS, NOT TO SCALE.'
@@ -318,17 +321,17 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
       <ul>
         <li class="js-only">${act} a row, or a line in the drawing, for NASA’s definition; what it measures turns yellow.</li>
         <li class="nojs-only">${act} a row’s name for NASA’s definition.</li>
-        <li class="js-only pointer">While a definition is open, ↑ ↓ or ‹ › above the table step through the rows.</li>
+        <li class="js-only pointer">While a definition is open, ↑ ↓<span class="steps-note"> or ‹ › above the table</span> step through the rows.</li>
         <li class="js-only">Rows marked ⊢⊣ are drawn. Drag view A to turn it; <span class="pointer">double-click</span><span class="touch">double-tap</span> to reset. Spin: 1 s = 1 h.</li>
         <li class="js-only">Tabs<span class="pointer"> and ← →</span> switch bodies and keep the selected row.</li>
-        <li>PLANETARY at the top left (☉ on a narrow screen) returns to the solar system.</li>
+        <li>PLANETARY at the top left (☉ on a phone or a small window) returns to the solar system.</li>
       </ul>
       <h3>General notes</h3>
       <ol class="drafting">${notes.map((n) => li(esc(n))).join('')}</ol>
       <h3>Sources</h3>
       <ul class="sources">${sources.map(li).join('')}</ul>
       <h3>Data and code</h3>
-      <p><a href="${ctx.base}data/factsheet.json">JSON</a> · <a href="${ctx.base}data/factsheet-main.csv">CSV</a> · ${out(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree (${conflicts ? `${conflicts} conflict${conflicts === 1 ? '' : 's'}` : 'no conflicts'} for ${esc(named(id))})`)} · ${out(ctx.repo, 'Source code')}</p>
+      <p><a href="${ctx.base}data/factsheet.json">JSON</a>&nbsp;· <a href="${ctx.base}data/factsheet-main.csv">CSV</a>&nbsp;· ${out(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree <span class="nowrap">(${conflicts ? `${conflicts} conflict${conflicts === 1 ? '' : 's'}` : 'no conflicts'} for ${esc(named(id))})</span>`)}&nbsp;· ${out(ctx.repo, 'Source code')}</p>
       <p class="title-line">${title}</p>
       <p class="status">Planetary · Unofficial — not a NASA product · not affiliated with or endorsed by NASA</p>`;
 }
@@ -360,10 +363,10 @@ export function bodySheet(id: BodyId, sheet: Sheet, ctx: PageCtx): Rendered {
     ${tabs(id, ctx)}
     <h1 id="sheet-title" class="visually-hidden">${esc(name)}</h1>
     <section class="views" aria-label="Drawings">
-      <p class="noscript">The drawings need JavaScript. NASA’s values and definitions work without it.</p>
+      <p class="noscript">The drawings need JavaScript, which is off or did not load. NASA’s values and definitions work without it.</p>
       <figure class="view view-a">
         <svg class="drawing" id="view-a" tabindex="0" role="img" aria-label="View A: ${esc(named(id))}, axis tilted ${obliquity} degrees from the orbit normal, with a scale bar in km. Drag sideways or use the arrow keys to turn it."></svg>
-        <figcaption><span class="letter">A</span><span class="caption" data-plan="20° above the orbit plane" data-tilt="Orbit plane edge-on · tilt true size" data-edge-on="Orbit plane edge-on">20° above the orbit plane</span><span class="hint">· drag to turn · <span class="si">1 s = 1 h</span></span><button type="button" class="swap" data-show="plan">Key plan</button><button type="button" id="pause">Pause</button></figcaption>
+        <figcaption><span class="letter">A</span><span class="caption" data-plan="20° above the orbit plane" data-tilt="Tilt true size · orbit plane edge-on" data-edge-on="Orbit plane edge-on">20° above the orbit plane</span><span class="hint">· drag to turn · <span class="si">1 s = 1 h</span></span><button type="button" class="swap" data-show="plan">Key plan</button><button type="button" id="pause">Pause</button></figcaption>
       </figure>
       <figure class="view key-plan">
         <svg class="drawing clip" id="key-plan" role="img" aria-label="${esc(planLabel)}" data-label="${esc(planLabel)}" data-edge-label="${esc(edgeLabel)}"></svg>

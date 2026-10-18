@@ -32,7 +32,7 @@ import {
   type LabelReq,
   type Spot,
 } from '../draw/labels.ts';
-import { isoNumber, letter } from '../draw/lettering.ts';
+import { CAP, isoNumber, letter } from '../draw/lettering.ts';
 import type { DrawList } from '../draw/svg.ts';
 import { DEG, cross, dot, norm, scale, sub, type Vec2, type Vec3 } from '../draw/vec.ts';
 import { View } from './view.ts';
@@ -163,15 +163,31 @@ export class KeyPlanView extends View {
     // mere reference, a quarter as much.
     const later: (LabelReq | LabelReq[])[] = [];
     const edge = this.focus === 'orbitalInclination' || this.camera.pitch < 60 * DEG;
-    /** Keep labels off an arrowhead with its tip at `tip`, pointing along `dir`. */
+    /** Keep labels off an arrowhead with its tip at `tip`, pointing along `dir`; no mask hides it. */
     const arrowOff = (tip: Vec2, dir: Vec2) => {
       const d = unit2(dir);
       const base: Vec2 = [tip[0] - d[0] * ARROW.len, tip[1] - d[1] * ARROW.len];
       labels.line([base, tip], ARROW.half + 1.5, 3, 2);
+      const h = ARROW.half;
+      labels.obstacles.push({
+        x0: Math.min(base[0], tip[0]) - h,
+        y0: Math.min(base[1], tip[1]) - h,
+        x1: Math.max(base[0], tip[0]) + h,
+        y1: Math.max(base[1], tip[1]) + h,
+        w: 2,
+        hard: true,
+      });
     };
-    /** Keep labels off a dot or a small mark. */
+    /** Keep labels off a dot or a small mark; no mask hides it. */
     const markOff = (c: Vec2, r: number, w = 1) =>
-      labels.obstacles.push({ x0: c[0] - r, y0: c[1] - r, x1: c[0] + r, y1: c[1] + r, w });
+      labels.obstacles.push({
+        x0: c[0] - r,
+        y0: c[1] - r,
+        x1: c[0] + r,
+        y1: c[1] + r,
+        w,
+        hard: true,
+      });
 
     // Reference: Earth's orbit (phantom; no row of its own, so not a target) and the ecliptic datum ♈
     // from the Sun.
@@ -541,8 +557,18 @@ export class KeyPlanView extends View {
         y = this.h - 16;
       scaleBar(dl, x, y, len, 2, '');
       labels.block({ x0: x - 2, y0: y - 16, x1: x + len + 90, y1: y + 9 });
+      // The scale's lettering interrupts any line under it (an orbit, a period tick).
+      const text = `${isoNumber(String(L))} ×10⁶ km`;
+      const tw = textBox(text, 's').w;
+      const cap = CAP.s;
+      labels.mask(dl, [
+        [x + len + 5, y + 4 - cap - 1],
+        [x + len + 7 + tw, y + 4 - cap - 1],
+        [x + len + 7 + tw, y + 4 + 2],
+        [x + len + 5, y + 4 + 2],
+      ]);
       letter(dl, '0', x, y - 6, { size: 's', anchor: 'start' });
-      letter(dl, `${isoNumber(String(L))} ×10⁶ km`, x + len + 6, y + 4, { size: 's' });
+      letter(dl, text, x + len + 6, y + 4, { size: 's' });
     }
 
     // The date first: the longest label, with the fewest free spots; the others have alternatives.

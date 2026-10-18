@@ -68,7 +68,7 @@ export function homeSheet(sheet: Sheet, ctx: PageCtx): Rendered {
     </header>
     ${infoButton()}
     <div class="orrery">
-      <p class="noscript">The drawing needs JavaScript. Every body’s sheet is linked below.</p>
+      <p class="noscript">The drawing needs JavaScript, which is off or did not load. Every body’s sheet is linked below.</p>
       <svg class="drawing" id="orrery" role="img" aria-label="Schematic of the solar system, not to scale: the planets move on their orbits at 1 minute = 1 year, from today’s positions."></svg>
       <nav class="bodies" aria-label="Bodies"><ol>${links}</ol></nav>
     </div>

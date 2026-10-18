@@ -74,8 +74,10 @@ export class Camera {
     return true;
   }
 
-  /** Rotate by a pointer drag (radians). */
+  /** Rotate by a pointer drag (radians). A turn that interrupts an animation keeps the elevation
+   *  the animation was going to: a turntable turn never changes it, so it would stay halfway. */
   orbit(dYaw: number, dPitch: number) {
+    if (this.tween) this.pitch = this.tween.to.pitch;
     this.tween = null;
     this.yaw += dYaw;
     this.pitch = clamp(this.pitch + dPitch, -90 * DEG, 90 * DEG);

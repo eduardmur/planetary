@@ -6,7 +6,8 @@
 //
 //   npm run build && npm run media
 import { spawn } from 'node:child_process';
-import { mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { chromium, devices } from '@playwright/test';
 import gifenc from 'gifenc';
@@ -38,6 +39,14 @@ const want = (what) => !only.length || only.includes(what);
 
 for (const d of ['public/og', 'docs/media', 'media'])
   mkdirSync(resolve(root, d), { recursive: true });
+
+// Never capture from a server this script did not start: the port must be free first.
+await new Promise((ok, fail) => {
+  const probe = createServer()
+    .once('error', () => fail(new Error(`port ${port} is in use: free it and run the media again`)))
+    .once('listening', () => probe.close(ok))
+    .listen(port, 'localhost');
+});
 
 const server = spawn(
   'npx',
@@ -89,6 +98,9 @@ if (want('og')) {
     await page.screenshot({ path: resolve(root, file) });
     await page.close();
     console.log(file, size(file));
+    // The build copied the old card; keep dist in step, so a preview serves the new one.
+    if (existsSync(resolve(root, 'dist/og')))
+      copyFileSync(resolve(root, file), resolve(root, `dist/og/${id}.png`));
   }
   await ctx.close();
 }
@@ -146,7 +158,9 @@ async function gif(page, selector, frames, fps, step, file, paletteAt = [0], fad
     shots.push(PNG.sync.read(await el.screenshot()));
   }
   const enc = GIFEncoder();
-  for (let i = 0; i < frames; i++) {
+  // The crossfaded frames go last, so the first frame (the one previews show) is a clean one.
+  for (let j = 0; j < frames; j++) {
+    const i = (j + fade) % frames;
     const { data, width, height } = shots[i];
     if (i < fade) {
       // Frame i fades in over the frames that follow the last one.

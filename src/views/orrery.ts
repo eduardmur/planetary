@@ -275,7 +275,9 @@ export class OrreryView extends View {
     this.ox = (this.w - (x1 - x0) * R) / 2 - x0 * R;
     this.oy = (this.h - (y1 - y0) * R) / 2 + y1 * R;
     for (const p of this.planets) p.r = symbolDiameter(p.m.diameter, R, this.model.dMax) / 2;
-    this.rho = 2 * (this.planet('earth')?.r ?? 0) + 6;
+    // The ring lies wholly outside the Earth's link, so every part of it opens the Moon.
+    const earth = this.planet('earth')?.r ?? 0;
+    this.rho = Math.max(2 * earth + 6, (Math.floor(Math.max(earth + 6, 12)) + 3) / Math.sin(pitch));
     // The Moon's link is the ring's ellipse, MOON_LINK px wider all round, under the Earth's.
     const moon = this.links.get('moon');
     if (moon) {
@@ -464,8 +466,9 @@ export class OrreryView extends View {
         .map((o) => shift(o.box, o.at))
         .concat(this.sunBox());
       const labels = new LabelPlacer({ x0: 4, y0: 4, x1: this.w - 4, y1: this.h - 4 }, others);
-      // Its orbit is lit with it: keep the name off it, as the key plans do.
-      if (id !== 'moon') labels.line(p.path);
+      // Its orbit is lit with it: keep the name off it, as the key plans do; under a finger only
+      // lightly, for the orbit runs through the finger and the name must still clear it.
+      if (id !== 'moon') labels.line(p.path, 2.5, 6, this.touchAt ? 0.05 : 1);
       const sun = this.px([0, 0, 0]);
       const text = (this.links.get(id)?.textContent ?? id).trim().toUpperCase();
       const cx = p.at[0] + (box.x0 + box.x1) / 2,
