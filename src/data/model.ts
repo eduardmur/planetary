@@ -6,6 +6,7 @@ import type { MeanElements } from '../astro/index.ts';
 import type { BodyModel, RingEdge } from '../views/body.ts';
 import type { KeyPlanModel, OrbitShape } from '../views/keyplan.ts';
 import { FACTS, body, mainVal, needRow, num, row, type BodyId, type Val } from './index.ts';
+import type { Ring } from './types.ts';
 
 const SUN_ORBITING: BodyId[] = [
   'mercury',
@@ -24,8 +25,9 @@ const SUN_ORBITING: BodyId[] = [
 /**
  * Which rows of NASA's ring sheets are drawn, and with which line type. Line types follow NASA's
  * optical depth: opaque main rings wide, rings of optical depth around 0.01 or more narrow, fainter
- * rings phantom. Rows beyond about 2.6 planet radii would shrink the planet; they are listed in a
- * note instead (see notDrawn below).
+ * rings phantom. Rows beyond about 2.6 planet radii would shrink the planet, and some rows among the
+ * drawn ones are left out; the popover names both (see ringList below). `why` gives the reason a
+ * group of rows is not drawn, printed after it.
  */
 const RING_PLAN: Partial<
   Record<
@@ -33,6 +35,7 @@ const RING_PLAN: Partial<
     {
       edges: { name: string; end?: 'inner' | 'outer'; line: RingEdge['line']; label?: string }[];
       opaque: [string, string][];
+      why?: Record<string, string>;
     }
   >
 > = {
@@ -78,6 +81,7 @@ const RING_PLAN: Partial<
       { name: 'Adams', line: 'thin', label: 'Adams' },
     ],
     opaque: [],
+    why: { 'Arcs in Adams Ring': 'NASA gives no longitudes' },
   },
 };
 
@@ -105,25 +109,86 @@ function ringRadius(v: Val, end: 'inner' | 'outer' | undefined): { r: number; te
   return { r: num(v, 'ring radius'), text: v.text };
 }
 
-function rings(id: BodyId): BodyModel['rings'] {
+/** The planned edges with the NASA row each comes from. */
+function plannedEdges(id: BodyId) {
+  return (RING_PLAN[id]?.edges ?? []).map((plan) => {
+    const row = ringRow(id, plan.name);
+    return { plan, row, ...ringRadius(row.radius, plan.end) };
+  });
+}
+
+/**
+ * The ring popover's list, which accounts for every row of NASA's ring sheet: each row is drawn, is
+ * the same line as a drawn edge (Saturn's C outer edge is its B inner edge), has no radius (the
+ * Cassini division), or is listed as not drawn by NASA's name and radius as printed.
+ */
+export interface RingList {
+  /** The drawn edges in the plan's order (inner to outer), by NASA's name for the row ("Arago
+   *  (1989N4R*)"); one end of a range keeps its label ("Main ring inner"). */
+  drawn: RingEdge[];
+  /** Rows beyond the outermost drawn edge: drawing them would shrink the planet. */
+  beyond: string[];
+  /** The other rows that are not drawn. A group of rows is one entry, with the plan's reason if any. */
+  omitted: string[];
+}
+
+export function ringList(id: BodyId): RingList | undefined {
   const plan = RING_PLAN[id];
   if (!plan) return undefined;
-  const edges: RingEdge[] = plan.edges.map((e) => {
-    const rr = ringRow(id, e.name);
-    const { r, text } = ringRadius(rr.radius, e.end);
-    return { name: e.label ?? rr.name, r, text, line: e.line };
-  });
+  const edges = plannedEdges(id); // throws when the ring sheet or a planned row is missing
+  const sheet = body(id).rings!;
+  const drawn = edges.map(({ plan: e, row, r, text }) => ({
+    name: e.end ? (e.label ?? row.name) : row.name,
+    r,
+    text,
+    line: e.line,
+  }));
+  const used = new Set(edges.map((e) => e.row));
+  const radii = new Set(edges.map((e) => e.r));
+  const outermost = Math.max(...radii);
+  // Rows in NASA's order, a group's rows together. Never matched by radius alone: Lassell has the
+  // radius of LeVerrier, and Adams's arcs that of Adams.
+  const items: Ring[][] = [];
+  for (const r of sheet.rings) {
+    const v = r.radius;
+    if (/equator/i.test(r.name) || used.has(r) || (v.value === null && !v.range)) continue;
+    if (/\bedge$/i.test(r.name) && v.value !== null && radii.has(v.value)) continue;
+    const last = items.at(-1);
+    if (r.group && last?.[0]?.group === r.group) last.push(r);
+    else items.push([r]);
+  }
+  const radius = (r: Ring) => r.radius.text.replace(/\s*-\s*/, '–');
+  const entry = (rows: Ring[]) => {
+    const group = rows[0]!.group;
+    const at = [...new Set(rows.map(radius))].join(', ');
+    if (!group) return `${rows[0]!.name} ${at}`;
+    const why = plan.why?.[group];
+    return `${group} (${rows.map((r) => r.name).join(', ')}) ${at}${why ? `: ${why}` : ''}`;
+  };
+  const beyond: string[] = [];
+  const omitted: string[] = [];
+  for (const rows of items) {
+    const outer = Math.max(...rows.map((r) => r.radius.range?.[1] ?? r.radius.value ?? 0));
+    (outer > outermost + 1 ? beyond : omitted).push(entry(rows));
+  }
+  return { drawn, beyond, omitted };
+}
+
+function rings(id: BodyId): BodyModel['rings'] {
+  const plan = RING_PLAN[id];
+  const list = ringList(id);
+  if (!plan || !list) return undefined;
+  const edges: RingEdge[] = plannedEdges(id).map(({ plan: e, row, r, text }) => ({
+    name: e.label ?? row.name,
+    r,
+    text,
+    line: e.line,
+  }));
   const opaque = plan.opaque.map(([a, b]) => ({
     inner: ringRadius(ringRow(id, a).radius, 'inner').r,
     outer: ringRadius(ringRow(id, b).radius, 'outer').r,
   }));
-  // Every ring-sheet row beyond the outermost drawn edge, by NASA's name and radius text.
-  const outermost = Math.max(...edges.map((e) => e.r));
-  const notDrawn = (body(id).rings?.rings ?? [])
-    .filter((r) => !/equator/i.test(r.name) && !r.group)
-    .filter((r) => (r.radius.range?.[1] ?? r.radius.value ?? 0) > outermost + 1)
-    .map((r) => `${r.name} ${r.radius.text.replace(/\s*-\s*/, '–')}`);
-  return { edges, opaque, notDrawn };
+  return { edges, opaque, notDrawn: list.beyond };
 }
 
 // ---- Magnetic dipole ---------------------------------------------------------------------------

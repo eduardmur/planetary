@@ -14,7 +14,7 @@ import {
   type Discrepancy,
   type Section,
 } from '../data/index.ts';
-import { bodyModel, keyPlanModel } from '../data/model.ts';
+import { bodyModel, keyPlanModel, ringList } from '../data/model.ts';
 import { PARAMS } from '../content/params.ts';
 import { BODY_SHEETS, SHEET_COUNT, type Sheet } from '../content/sheets.ts';
 import { CAP, measure } from '../draw/lettering.ts';
@@ -138,20 +138,21 @@ function alsoDrawn(id: BodyId, key: string): string {
       return fromPage(items);
     }
     case 'ringSystem': {
+      // Every row of NASA's ring sheet: the edges drawn, under NASA's names, then those not drawn.
       const rings = page.rings;
-      if (!b.rings || !rings) return '';
-      const edges = b.rings.edges
+      const list = ringList(id);
+      if (!list || !rings) return '';
+      const edges = list.drawn
         .map(
           (e) =>
             `<div><dt>${esc(ringName(e.name))}</dt><dd>${esc(e.text)}</dd><dd>${LINE[e.line]}</dd></div>`,
         )
         .join('');
-      const notDrawn = b.rings.notDrawn.length
-        ? `<p>Not drawn at this scale: ${b.rings.notDrawn.map(esc).join(' · ')}.</p>`
-        : '';
+      const notDrawn = (lead: string, rows: string[]) =>
+        rows.length ? `<p>${lead}: ${rows.map(esc).join(' · ')}.</p>` : '';
       return section(
         `${esc(page.name)} rings fact sheet <time>${isoDate(rings.lastUpdated)}</time>`,
-        `<p class="k">Ring edges drawn <span class="unit">(km)</span></p><dl class="edges">${edges}</dl>${notDrawn}<p>Wide = opaque rings, narrow = fainter, phantom = optical depth under about 0.01.</p>${rings.notes.map((n) => `<p class="n">${esc(n)}</p>`).join('')}`,
+        `<p class="k">Ring edges drawn <span class="unit">(km)</span></p><dl class="edges">${edges}</dl>${notDrawn('Not drawn', list.omitted)}${notDrawn('Not drawn at this scale', list.beyond)}<p>Wide = opaque rings, narrow = fainter, phantom = optical depth under about 0.01.</p>${rings.notes.map((n) => `<p class="n">${esc(n)}</p>`).join('')}`,
       );
     }
     case 'magneticField': {
@@ -187,9 +188,30 @@ function alsoDrawn(id: BodyId, key: string): string {
   return '';
 }
 
-/** One line of the ledger, in its own words. */
-const conflict = (d: Discrepancy) =>
-  `<p class="conflict">NASA’s pages disagree: ${esc(d.what)}: ${esc(d.a)} (${esc(d.aSrc)}) vs ${esc(d.b)} (${esc(d.bSrc)}).${d.note ? ` ${esc(d.note)}` : ''}</p>`;
+/**
+ * A line of the ledger, in its own words: two pages that disagree, or one page that disagrees with
+ * itself (named once, in the lead). Lines that compare the same thing on the same page with the same
+ * note share one paragraph, as Uranus's three ring ratios do; map() passes the row's whole list.
+ */
+const conflict = (d: Discrepancy, i: number, list: Discrepancy[]): string => {
+  const together = (e: Discrepancy | undefined) =>
+    !!e && e.within === d.within && e.what === d.what && e.note === d.note;
+  if (together(list[i - 1])) return ''; // already in the paragraph before
+  let end = i + 1;
+  while (together(list[end])) end++;
+  const src = (s: string) => (s === d.within ? '' : ` (${esc(s)})`);
+  // A value never breaks inside itself; a worked one may break before its result.
+  const whole = (v: string) =>
+    v
+      .split(' = ')
+      .map((s, j) => `<span class="nowrap">${j ? '= ' : ''}${esc(s)}</span>`)
+      .join(' ');
+  const pairs = list
+    .slice(i, end)
+    .map((e) => `${whole(e.a)}${src(e.aSrc)} vs ${whole(e.b)}${src(e.bSrc)}`);
+  const lead = d.within ? `NASA’s ${esc(d.within)} disagrees with itself` : 'NASA’s pages disagree';
+  return `<p class="conflict">${lead} on ${esc(d.what)}: ${pairs.join('; ')}.${d.note ? ` ${esc(d.note)}` : ''}</p>`;
+};
 
 /**
  * A row's popover: the label and NASA's value, its ratio to Earth, NASA's definition verbatim, what

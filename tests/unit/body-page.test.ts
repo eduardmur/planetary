@@ -68,10 +68,24 @@ describe('body pages', () => {
       for (const p of PARAMS) {
         const lines = popover(id, p.key).querySelectorAll('.conflict').map(text);
         const ledger = DISCREPANCIES.filter((d) => d.body === id && d.key === p.key);
-        expect(lines).toHaveLength(ledger.length);
-        ledger.forEach((d, i) => {
-          for (const s of [d.what, d.a, d.aSrc, d.b, d.bSrc]) expect(lines[i]).toContain(s);
-        });
+        // A paragraph each, but lines alike in all but their values share one.
+        expect(lines).toHaveLength(
+          new Set(ledger.map((d) => `${d.within}|${d.what}|${d.note}`)).size,
+        );
+        for (const d of ledger) {
+          const lead = d.within
+            ? `NASA’s ${d.within} disagrees with itself`
+            : 'NASA’s pages disagree';
+          // A page that disagrees with itself is named once, in the lead.
+          const src = (s: string) => (s === d.within ? '' : ` (${s})`);
+          const pair = `${d.a}${src(d.aSrc)} vs ${d.b}${src(d.bSrc)}`;
+          const line = lines.find(
+            (l) => l.startsWith(`${lead} on ${d.what}: `) && l.includes(pair),
+          );
+          expect(line, `${id} ${p.key}: ${pair}`).toBeDefined();
+          expect(line!.split(': '), line).toHaveLength(2);
+          if (d.note) expect(line).toContain(d.note);
+        }
       }
     });
 
@@ -144,8 +158,29 @@ describe('body pages', () => {
     const rings = popover('saturn', 'ringSystem');
     expect(rings.querySelectorAll('dl.edges > div')).toHaveLength(8);
     expect(text(rings)).toContain('2022-04-19');
-    expect(text(rings)).toContain('Not drawn at this scale: G inner edge 166,000');
+    // Every row of NASA's ring sheet is drawn or named: inside the drawn rings, then beyond them.
+    expect(text(rings)).toContain(
+      'Not drawn: D outer edge 74,510 · Titan ringlet 77,871 · Maxwell gap/ringlet 87,491 · Keeler gap 136,487. Not drawn at this scale: G inner edge 166,000',
+    );
     expect(text(rings)).toContain('Wide = opaque rings, narrow = fainter, phantom');
+    // Neptune: NASA's names, so its note's "*" has something to refer to; the arcs are named.
+    const neptune = popover('neptune', 'ringSystem');
+    expect(neptune.querySelectorAll('dl.edges dt').map(text)).toEqual([
+      'Galle (1989N3R)',
+      'LeVerrier (1989N2R)',
+      'Arago (1989N4R*)',
+      'Adams (1989N1R)',
+    ]);
+    expect(text(neptune)).toContain(
+      'Not drawn: Lassell (1989N4R*) ~53,200 · Unnamed (indistinct) 61,953 · Arcs in Adams Ring (Courage, Liberté, Egalité 1, Egalité 2, Fraternité) 62,933: NASA gives no longitudes.',
+    );
+    expect(text(neptune)).toContain('(*Lassell and Arago were originally identified as one ring');
+    expect(text(neptune)).not.toContain('at this scale');
+    // Jupiter and Uranus draw every row inside their outermost drawn edge.
+    for (const id of ['jupiter', 'uranus'] as const) {
+      expect(text(popover(id, 'ringSystem'))).not.toContain('Not drawn:');
+      expect(text(popover(id, 'ringSystem'))).toContain('Not drawn at this scale: ');
+    }
 
     expect(also('mars', 'perihelion')).toContain('Longitude of perihelion (deg) 336.04084');
     expect(also('mars', 'orbitalInclination')).toContain('Longitude of ascending node (deg)');
@@ -168,7 +203,7 @@ describe('body pages', () => {
     ).toBe(false);
   });
 
-  it('15 popovers carry the 19 conflicts', () => {
+  it('15 popovers carry the 18 conflicts, in 16 paragraphs', () => {
     let popovers = 0,
       lines = 0;
     for (const root of dom.values())
@@ -178,6 +213,28 @@ describe('body pages', () => {
         lines += n;
       }
     expect(popovers).toBe(15);
-    expect(lines).toBe(19);
+    expect(lines).toBe(16);
+  });
+
+  it('conflict lines say whether two pages disagree or one page disagrees with itself', () => {
+    const lines = (id: BodyId, key: string) =>
+      popover(id, key).querySelectorAll('.conflict').map(text);
+    expect(lines('mercury', 'diameter')).toEqual([
+      'NASA’s pages disagree on diameter vs 2 × equatorial radius (km): 4879 (main table) vs 2 × 2440.5 = 4881 (mercuryfact.html).',
+    ]);
+    expect(lines('moon', 'diameter')).toEqual([
+      'NASA’s pages disagree on diameter vs 2 × equatorial radius (km): 3475 (main table) vs 2 × 1738.1 = 3476.2 (moonfact.html).',
+    ]);
+    expect(lines('pluto', 'orbitalEccentricity')).toEqual([
+      'NASA’s main table disagrees with itself on eccentricity vs perihelion and aphelion: 0.244 vs (7375.9 − 4436.8)/(7375.9 + 4436.8) = 0.2488. Planetary draws the ellipse from the perihelion and aphelion, and lists the eccentricity as NASA prints it.',
+    ]);
+    expect(lines('pluto', 'meanTemperature')).toEqual([
+      'NASA’s pages disagree on mean temperature vs “Surface temperature” (°C): -225 (main table) vs 24 - 38 K (-247 - -233 C) (plutofact.html).',
+      'NASA’s plutofact.html disagrees with itself on “Surface temperature”: 24 - 38 K printed as -247 to -233 C vs -249.15 to -235.15 C (K − 273.15).',
+    ]);
+    // Uranus's three ring ratios read as one paragraph, with the note once.
+    expect(lines('uranus', 'ringSystem')).toEqual([
+      'NASA’s uranringfact.html disagrees with itself on the Radius/Eq. radius column: Eta 1.834 vs 47,176 ÷ 25,559 = 1.846; Delta 1.900 vs 48,300 ÷ 25,559 = 1.890; Epsilon 2.006 vs 51,149 ÷ 25,559 = 2.001. Planetary draws the rings from the km column.',
+    ]);
   });
 });

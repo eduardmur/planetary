@@ -12510,6 +12510,20 @@
     }
   },
   "definitions": {
+    "pages": {
+      "main": {
+        "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/planetfact_notes.html",
+        "lastUpdated": "20 December 2021"
+      },
+      "ratio": {
+        "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/planetfact_ratio_notes.html",
+        "lastUpdated": "17 July 2015"
+      },
+      "sheet": {
+        "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/fact_notes.html",
+        "lastUpdated": "6 May 2024"
+      }
+    },
     "main": {
       "mass": {
         "term": "Mass (10²⁴kg or 10²¹tons)",

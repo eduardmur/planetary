@@ -208,7 +208,19 @@ export interface Definition {
   text: string;
 }
 
+/** One of NASA's notes pages: its address and NASA's date for it. */
+export interface NotesPage {
+  url: string;
+  /** From "Last Updated: 20 December 2021, DRW" → "20 December 2021". */
+  lastUpdated: string;
+}
+
 export interface Definitions {
+  /**
+   * The three notes pages the definitions come from, keyed as the definitions are: `main`
+   * planetfact_notes.html, `ratio` planetfact_ratio_notes.html, `sheet` fact_notes.html.
+   */
+  pages: Record<'main' | 'ratio' | 'sheet', NotesPage>;
   /** planetfact_ratio_notes.html, keyed by the ratio table's row keys. */
   ratio?: Record<string, Definition>;
   /** planetfact_notes.html, keyed by MainRow.key. Footnote paragraphs ("* For the Moon…") are part of `text`. */
@@ -236,20 +248,30 @@ export interface Definitions {
 }
 
 /**
- * A place where two of NASA's pages print values that cannot be roundings of one number, from
- * src/data/discrepancies.json (written by scripts/ledger.ts; data/discrepancies.md lists them too).
+ * A place where NASA prints values that cannot be roundings of one number: two pages against each
+ * other, or one page against itself. From src/data/discrepancies.json (written by scripts/ledger.ts;
+ * data/discrepancies.md lists them too).
  */
 export interface Discrepancy {
   body: BodyId;
-  /** The schedule row whose popover shows it: a main-table key (ringSystem for the ring sheets). */
+  /** The table row whose popover shows it: a main-table key (ringSystem for the ring sheets). */
   key: string;
-  /** What is compared, e.g. "Rotation period (h)". */
+  /** What is compared, as running text, e.g. "rotation period (h)". */
   what: string;
-  /** Each value as printed, with the page it comes from, e.g. "-5832.5" from "main table". */
+  /**
+   * Each value as printed, or worked out from printed values ("2 × 2440.5 = 4881"), with where it
+   * comes from: a page ("venusfact.html", "main table") or a formula ("K − 273.15").
+   */
   a: string;
   aSrc: string;
   b: string;
   bSrc: string;
+  /**
+   * The page (or table) both values come from, when it disagrees with itself, e.g. "main table",
+   * "plutofact.html". Absent when two pages disagree.
+   */
+  within?: string;
+  /** What Planetary does about it, e.g. "Planetary draws the rings from the km column." */
   note?: string;
 }
 

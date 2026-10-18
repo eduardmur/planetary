@@ -34,6 +34,7 @@ import type {
   Gas,
   MainRow,
   MainTable,
+  NotesPage,
   Ring,
   RingSheet,
   Row,
@@ -1737,7 +1738,7 @@ function paragraphBlocks(lines: Line[]): Line[][] {
   return out;
 }
 
-function parseSheetNotes(): Omit<Definitions, 'main' | 'notes' | 'unkeyed'> & {
+function parseSheetNotes(): Omit<Definitions, 'pages' | 'main' | 'notes' | 'unkeyed'> & {
   notes: Record<string, string[]>;
   unkeyed: Record<string, Definition[]>;
 } {
@@ -1852,22 +1853,33 @@ function urlOf(file: string): string {
   return entry.url;
 }
 
+/** A notes page's address and NASA's "Last Updated" date (urlOf checks the page's hash first). */
+function notesPage(file: string): NotesPage {
+  const url = urlOf(file);
+  return { url, lastUpdated: lastUpdated(readRaw(file), file) };
+}
+
 /** Parses the whole snapshot. Pure: the same data/raw/ always gives the same object. */
 export function buildFactSheet(): FactSheet {
+  // Dated like every other source; this also checks the three pages against the manifest before
+  // any of them is parsed.
+  const pages: Definitions['pages'] = {
+    main: notesPage(PAGES.mainNotes),
+    ratio: notesPage(PAGES.ratioNotes),
+    sheet: notesPage(PAGES.sheetNotes),
+  };
   const main = parseMain(urlOf(PAGES.main));
   const mainNotes = parseMainNotes(main.rows);
-  urlOf(PAGES.mainNotes);
   const ratio = parseRatio(urlOf(PAGES.ratio));
   // NASA's ratio table links "Obliquity to Orbit" to #orbo, but its notes page names that
   // definition "Axial Tilt" under #axit (the link is broken on NASA's site).
   const ratioNotes = parseRowNotes(PAGES.ratioNotes, ratio.rows, { orbo: 'axit' });
-  urlOf(PAGES.ratioNotes);
-  urlOf(PAGES.sheetNotes);
   const sheetNotes = parseSheetNotes();
   const bodies = Object.fromEntries(
     BODY_IDS.map((id) => [id, parseBody(id, urlOf(BODY_PAGES[id]))]),
   ) as Record<BodyId, BodySheet>;
   const definitions: Definitions = {
+    pages,
     main: mainNotes.main,
     ratio: ratioNotes.main,
     sheet: sheetNotes.sheet,
