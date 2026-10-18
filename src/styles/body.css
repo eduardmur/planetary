@@ -77,6 +77,9 @@ html:has(.sheet-body) {
   line-height: 1;
 }
 .sheet-body .tabs nav {
+  /* The width of ‹ › where they show (below): the text under them is hidden, and the fade starts
+     beside them. */
+  --more-w: 0px;
   position: relative;
   flex: 1;
   min-width: 0;
@@ -94,18 +97,18 @@ html:has(.sheet-body) {
   scrollbar-width: none;
 }
 .sheet-body .tabs nav[data-more='left'] .strip {
-  mask-image: linear-gradient(to right, transparent, #000 30px);
+  mask-image: linear-gradient(to right, transparent var(--more-w), #000 calc(var(--more-w) + 30px));
 }
 .sheet-body .tabs nav[data-more='right'] .strip {
-  mask-image: linear-gradient(to left, transparent, #000 30px);
+  mask-image: linear-gradient(to left, transparent var(--more-w), #000 calc(var(--more-w) + 30px));
 }
 .sheet-body .tabs nav[data-more='both'] .strip {
   mask-image: linear-gradient(
     to right,
-    transparent,
-    #000 30px,
-    #000 calc(100% - 30px),
-    transparent
+    transparent var(--more-w),
+    #000 calc(var(--more-w) + 30px),
+    #000 calc(100% - var(--more-w) - 30px),
+    transparent calc(100% - var(--more-w))
   );
 }
 html:not(.js) .sheet-body .tabs .strip {
@@ -140,6 +143,9 @@ html:not(.js) .sheet-body .tabs .strip {
   right: 0;
 }
 @media (hover: hover) and (pointer: fine) {
+  .sheet-body .tabs nav {
+    --more-w: 20px;
+  }
   .sheet-body .tabs nav:is([data-more='left'], [data-more='both']) .more[data-dir='-1'],
   .sheet-body .tabs nav:is([data-more='right'], [data-more='both']) .more[data-dir='1'] {
     display: grid;

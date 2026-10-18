@@ -586,11 +586,15 @@ export function initBody(data: PageData) {
   const strip = document.querySelector<HTMLElement>('.tabs .strip');
   const nav = strip?.parentElement;
   const here = strip?.querySelector<HTMLElement>('[aria-current="page"]');
+  const range = document.createRange();
   const edges = () => {
     if (!strip || !nav) return;
-    const max = strip.scrollWidth - strip.clientWidth;
-    const left = strip.scrollLeft > 1,
-      right = strip.scrollLeft < max - 1;
+    // A side hides tabs where the name of the end tab runs past it, not where only padding does.
+    const s = strip.getBoundingClientRect();
+    range.selectNodeContents(tabs[0]!);
+    const left = range.getBoundingClientRect().left < s.left - 0.5;
+    range.selectNodeContents(tabs.at(-1)!);
+    const right = range.getBoundingClientRect().right > s.right + 0.5;
     const more = left && right ? 'both' : left ? 'left' : right ? 'right' : '';
     if (nav.dataset.more !== more) nav.dataset.more = more;
   };
@@ -629,8 +633,10 @@ export function initBody(data: PageData) {
       },
       { passive: false },
     );
-    // A tab that takes keyboard focus comes out from under the faded edges.
+    // A tab that takes keyboard focus comes out from under the faded edges. Only keyboard focus: a
+    // tab that a press focuses must stay under the finger or the mouse, or the click is lost.
     strip.addEventListener('focusin', (e) => {
+      if (!(e.target as Element).matches(':focus-visible')) return;
       const st = strip.getBoundingClientRect(),
         r = (e.target as Element).getBoundingClientRect(),
         pad = 32;
