@@ -1,6 +1,6 @@
 // Pages crossfade into each other: the opt-in sits in each page's <head>, so every in-app navigation
 // runs a view transition, and none throws. Back and Forward skip it, so that a tap right after them
-// is not lost on the picture of the old page.
+// is not lost on the picture of the old page, and that throws nothing either.
 
 import { expect, test } from '@playwright/test';
 
@@ -57,5 +57,24 @@ test('every link between pages crossfades, Back does not, without errors', async
       ])
       .flat(),
   );
+  expect(errors).toEqual([]);
+});
+
+// The test above settles each transition's promises itself; here nothing does but the page.
+test('Back and Forward skip it without an error', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto('saturn/');
+  for (let i = 0; i < 2; i++) {
+    await page.locator('.tabs a[data-body="mars"]').click();
+    await page.waitForURL(/\/mars\/$/);
+    await page.goBack();
+    await page.waitForURL(/\/saturn\/$/);
+    await page.goForward();
+    await page.waitForURL(/\/mars\/$/);
+    await page.goBack();
+    await page.waitForURL(/\/saturn\/$/);
+  }
+  await page.waitForTimeout(300);
   expect(errors).toEqual([]);
 });

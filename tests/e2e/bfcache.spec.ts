@@ -1,6 +1,6 @@
 // Back to the home page from a body's page through the back-forward cache: nothing is pointed at, the
-// chooser is closed and the clock runs. Chrome replays pointerenter where the mouse clicked, without a
-// pointermove, though the mouse has moved on.
+// chooser is closed, the clock runs and nothing throws. Chrome replays pointerenter where the mouse
+// clicked, without a pointermove, though the mouse has moved on.
 
 import { expect, test, type Page } from '@playwright/test';
 
@@ -41,6 +41,8 @@ test('back from a body’s page, nothing is pointed at and the clock runs', asyn
   page,
   isMobile,
 }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto('');
   await page.evaluate(() => ((window as unknown as Hooks).__restored = 1));
   if (isMobile) {
@@ -67,6 +69,7 @@ test('back from a body’s page, nothing is pointed at and the clock runs', asyn
   const a = await simDate(page);
   await page.waitForTimeout(800);
   expect(await simDate(page)).not.toBe(a);
+  expect(errors).toEqual([]);
   if (isMobile) return;
   // The mouse is pointing again as soon as it moves.
   const p = await at(page, 'saturn');

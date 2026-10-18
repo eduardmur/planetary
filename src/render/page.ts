@@ -23,9 +23,10 @@ const VIEW_TRANSITIONS =
   '@view-transition{navigation:auto}@media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}';
 /**
  * Back and Forward skip it: while it runs, a tap lands on the picture of the old page and is lost.
- * Without the Navigation API a traversal cannot be told, and the crossfade stays.
+ * Skipping rejects the transition's ready promise, which is caught first, or every Back and Forward
+ * logs an error. Without the Navigation API a traversal cannot be told, and the crossfade stays.
  */
-const NO_FADE_BACK = `addEventListener('pagereveal',e=>{if(self.navigation?.activation?.navigationType==='traverse')e.viewTransition?.skipTransition()})`;
+const NO_FADE_BACK = `addEventListener('pagereveal',e=>{const t=e.viewTransition;if(t&&self.navigation?.activation?.navigationType==='traverse'){t.ready.catch(()=>{});t.skipTransition()}})`;
 
 function head(sheet: Sheet, ctx: PageCtx, r: Rendered): string {
   const url = ctx.site + sheet.slug + (sheet.slug ? '/' : '');
