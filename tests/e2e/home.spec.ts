@@ -1,7 +1,7 @@
 // The home page: a moving schematic whose bodies are links. Pointing at one names it and stops the
 // clock; a click, a tap or Enter opens its page; on a phone a tap among several opens a chooser.
 
-import { expect, test, type Page } from '@playwright/test';
+import { devices, expect, test, type Page } from '@playwright/test';
 
 /** The hooks the view exposes as window.__pb.views.orrery. */
 type Hooks = {
@@ -237,6 +237,69 @@ test('a tap among several bodies opens a chooser; a tap on one opens its page', 
   const jupiter = await at(page, 'jupiter');
   await page.touchscreen.tap(jupiter.x, jupiter.y);
   await expect(page).toHaveURL(/\/jupiter\/$/);
+});
+
+test('on a touch screen wider than 860 px, a tap just above Pause still toggles it', async ({
+  browser,
+  isMobile,
+}, testInfo) => {
+  test.skip(isMobile, 'once per engine, in a tablet of its own');
+  const {
+    viewport,
+    deviceScaleFactor,
+    isMobile: mobile,
+    hasTouch,
+    userAgent,
+  } = devices['iPad Mini landscape'];
+  const context = await browser.newContext({
+    viewport,
+    deviceScaleFactor,
+    isMobile: mobile,
+    hasTouch,
+    userAgent,
+    baseURL: testInfo.project.use.baseURL,
+  });
+  const page = await context.newPage();
+  await page.goto('');
+  const pause = page.locator('#pause');
+  await expect(pause).toHaveAttribute('data-paused', 'false');
+  const b = (await pause.boundingBox())!;
+  await page.touchscreen.tap(b.x + b.width / 2, b.y - 6);
+  await expect(pause).toHaveAttribute('data-paused', 'true');
+  await context.close();
+});
+
+test('in a contrast theme the Pause icon keeps its bars and its triangle', async ({
+  page,
+  isMobile,
+  browserName,
+}) => {
+  test.skip(
+    !isMobile || browserName !== 'chromium',
+    'the icon is for phones; forced colours: Chromium',
+  );
+  await page.emulateMedia({ forcedColors: 'active' });
+  await page.goto('');
+  const icon = () =>
+    page.evaluate(() => {
+      const s = getComputedStyle(document.getElementById('pause')!, '::before');
+      return {
+        left: `${s.borderLeftStyle} ${s.borderLeftWidth}`,
+        right: `${s.borderRightStyle} ${s.borderRightWidth}`,
+        size: `${s.width} ${s.height}`,
+        fill: s.backgroundColor,
+        clip: s.clipPath,
+      };
+    });
+  // Two 3 px bars: the borders either side of a 3 px gap.
+  expect(await icon()).toMatchObject({ left: 'solid 3px', right: 'solid 3px', size: '3px 12px' });
+  await page.locator('#pause').click();
+  await expect(page.locator('#pause')).toHaveAttribute('data-paused', 'true');
+  // A filled triangle.
+  const play = await icon();
+  expect(play).toMatchObject({ left: 'none 0px', size: '11px 14px' });
+  expect(play.clip).toMatch(/^polygon/);
+  expect(play.fill).not.toMatch(/^rgba\(.*, 0\)$/);
 });
 
 test('with reduced motion the clock starts paused at today; Play and Pause work', async ({
