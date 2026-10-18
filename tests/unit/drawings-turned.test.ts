@@ -29,7 +29,17 @@ vi.mock('../../src/draw/lettering.ts', async (importOriginal) => {
 });
 
 describe('View A turned', () => {
-  const TURNED: Size[] = ['1440x900', '1280x720', '1024x768', '1180x820', '390x664', '390x844'];
+  const TURNED: Size[] = [
+    '1440x900',
+    '1280x720',
+    '1024x768',
+    '1180x820',
+    '861x700',
+    '390x664',
+    '390x844',
+    '540x960',
+    '320x568',
+  ];
   // Every row at every turn: a body with rings takes a few seconds.
   const slow = { timeout: 30_000 };
   for (const size of TURNED)

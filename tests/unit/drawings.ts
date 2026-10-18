@@ -316,8 +316,8 @@ export function drawnRows(id: BodyId): { key: string; shape: string }[] {
 }
 
 type Drawn = { rec: Recorder; view: BodyView | KeyPlanView };
-export const drawOf = (v: BodyView | KeyPlanView, rec: Recorder) =>
-  (v as unknown as { draw(dl: DrawList, now: number): void }).draw(rec, 0);
+export const drawOf = (v: BodyView | KeyPlanView, dl: DrawList) =>
+  (v as unknown as { draw(dl: DrawList, now: number): void }).draw(dl, 0);
 
 export function viewA(id: BodyId, size: Size, label?: string): BodyView {
   const s = SIZES[size].a;

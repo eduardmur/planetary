@@ -1,24 +1,25 @@
 // Every lettered value in View A and the key plan, for every body, every drawn row and the sizes the
-// built pages give the drawings in eighteen windows (desktop from 1024×768 to 2560×1440, an iPad held
-// upright, phones from 320×568 to 430×932, and phones held sideways): no other line may run through
-// the lettering or come within a stroke's breadth of it, unless a mask interrupts it there; no mask
-// may hide a mark (a dot, an arrowhead) or the body's outline; no two labels may come within 3 px of
-// each other, nor stand side by side on one line less than 10 px apart, as if one; and the lettering
-// stays inside the drawing. Then the ring radii, the dipole, the values drawn always and what View A's
-// description says of the graphic scale. The key plan on other dates is in drawings-dates.test.ts,
-// View A turned in drawings-turned.test.ts.
+// built pages give the drawings in twenty-two windows (desktop from 861×501 to 2560×1440, an iPad
+// held upright, phones from 320×568 to 540×960, and phones held sideways): no other line may run
+// through the lettering or come within a stroke's breadth of it, unless a mask interrupts it there;
+// no mask may hide a mark (a dot, an arrowhead) or the body's outline; no two labels may come within
+// 3 px of each other, nor stand side by side on one line less than 10 px apart, as if one; and the
+// lettering stays inside the drawing. Then the ring radii, the dipole, the values drawn always, what
+// View A's description says of the graphic scale, and how a spinning body letters its frames. The key
+// plan on other dates is in drawings-dates.test.ts, View A turned in drawings-turned.test.ts.
 
 import { describe, expect, it, vi } from 'vitest';
 import { BODY_IDS, type BodyId } from '../../src/data/index.ts';
-import type { Box, LabelPlacer } from '../../src/draw/labels.ts';
+import { LabelPlacer, type Box } from '../../src/draw/labels.ts';
 import type { LetterOpts } from '../../src/draw/lettering.ts';
-import type { DrawList } from '../../src/draw/svg.ts';
+import { DrawList } from '../../src/draw/svg.ts';
 import type { Vec2 } from '../../src/draw/vec.ts';
 import { BodyView } from '../../src/views/body.ts';
 import {
   CHECKED,
   boxOf,
   dense,
+  drawOf,
   drawViewA,
   drawnRows,
   hull,
@@ -155,6 +156,19 @@ describe('the dipole', () => {
         );
         if (!leader) expect(letters.some((q) => near(q, arc.pts, 12))).toBe(true);
       });
+  // Its offset, which the popover lists as drawn: in one line, or in two where one fits nowhere.
+  for (const size of CHECKED)
+    it(`its offset is lettered at ${size}`, () => {
+      const missing: string[] = [];
+      for (const id of BODY_IDS) {
+        const { rec, view } = drawViewA(id, size, 'magneticField');
+        const note = (view as BodyView).m.dipole?.note;
+        const texts = rec.labels.map((l) => l.text);
+        if (note && !texts.includes(note) && !note.split(' · ').every((t) => texts.includes(t)))
+          missing.push(id);
+      }
+      expect(missing).toEqual([]);
+    });
 });
 
 describe('values drawn always', () => {
@@ -186,4 +200,31 @@ describe("View A's description", () => {
     expect(label('1440x900')).toBe(page);
     expect(label('320x568')).toBe('View A: Earth, axis tilted 23.4 degrees from the orbit normal.');
   });
+});
+
+describe('a spinning body', () => {
+  // Nothing its lettering goes by turns with it: each frame letters the labels where the first one
+  // did, without pricing a place again, and takes no longer than a body without a dipole.
+  for (const id of ['earth', 'jupiter'] as BodyId[])
+    it(`${id} letters its frames without looking for places, in under 2 ms each`, () => {
+      const v = viewA(id, '390x844');
+      drawOf(v, new DrawList());
+      const priced = [
+        vi.spyOn(LabelPlacer.prototype, 'cost'),
+        vi.spyOn(LabelPlacer.prototype, 'costTurned'),
+      ];
+      const ms: number[] = [];
+      try {
+        for (let i = 1; i <= 31; i++) {
+          v.clock = () => 2500 + i * 37;
+          const t0 = performance.now();
+          drawOf(v, new DrawList());
+          ms.push(performance.now() - t0);
+        }
+        for (const spy of priced) expect(spy).not.toHaveBeenCalled();
+      } finally {
+        for (const spy of priced) spy.mockRestore();
+      }
+      expect(ms.sort((a, b) => a - b)[15]).toBeLessThan(2);
+    });
 });

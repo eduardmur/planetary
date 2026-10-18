@@ -1,7 +1,7 @@
 // The key plan every two months over two years, for every body, every drawn row and the sizes of
 // drawings-sweep.test.ts: the planets move round their orbits, and the position, its arrow and the
 // date with them. Its lettering keeps the same rules on every date, and the position and its arrow
-// keep off the other marks (♈, the Sun).
+// keep off the other marks (♈, the Sun), edge-on too.
 
 import { describe, expect, it, vi } from 'vitest';
 import { BODY_IDS } from '../../src/data/index.ts';
@@ -39,22 +39,28 @@ describe('the key plan over two years', () => {
         expect(out).toEqual([]);
       });
 
-  it('the position and its arrow keep off the other marks (♈, the Sun)', () => {
-    const out: string[] = [];
-    for (const size of CHECKED)
+  // Edge-on, the Sun and the ascending node stand on the line of sight, which the position may
+  // cross; there it keeps off ♈'s arrowhead, the three-cornered mark of no row.
+  for (const size of CHECKED)
+    it(`the position and its arrow keep off the other marks at ${size}: ♈ and the Sun, and ♈ edge-on`, () => {
+      const out: string[] = [];
       for (const id of BODY_IDS)
-        for (const epoch of DATES) {
-          const { rec } = drawKeyPlan(id, size, null, epoch);
-          const fills = rec.ink.filter((g) => g.fill);
-          const own = fills.filter((g) => g.ref === 'orbitalVelocity');
-          for (const a of own)
-            for (const b of fills.filter((g) => g.ref !== 'orbitalVelocity'))
-              if (
-                dense(a.pts, 0.3, true).some((q) => inside(q, b.pts)) ||
-                dense(b.pts, 0.3, true).some((q) => inside(q, a.pts))
-              )
-                out.push(`${id} at ${size} on ${epoch.toISOString().slice(0, 10)}`);
-        }
-    expect([...new Set(out)]).toEqual([]);
-  });
+        for (const epoch of DATES)
+          for (const key of [null, 'orbitalInclination']) {
+            const { rec } = drawKeyPlan(id, size, key, epoch);
+            const fills = rec.ink.filter((g) => g.fill);
+            const own = fills.filter((g) => g.ref === 'orbitalVelocity');
+            const others = fills.filter(
+              (g) => g.ref !== 'orbitalVelocity' && (!key || (!g.ref && g.pts.length === 3)),
+            );
+            for (const a of own)
+              for (const b of others)
+                if (
+                  dense(a.pts, 0.3, true).some((q) => inside(q, b.pts)) ||
+                  dense(b.pts, 0.3, true).some((q) => inside(q, a.pts))
+                )
+                  out.push(`${id} ${key ?? 'idle'} on ${epoch.toISOString().slice(0, 10)}`);
+          }
+      expect([...new Set(out)]).toEqual([]);
+    });
 });
