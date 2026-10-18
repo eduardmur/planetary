@@ -1,7 +1,9 @@
 // The drawings in the browsers: no line runs through a lettered value, in any state a row can give a
-// drawing; every line that lights up belongs to a row; and turned any way, View A stays inside its
-// frame and off the key plan.
+// drawing; every line that lights up belongs to a row; turned any way, View A stays inside its frame
+// and off the key plan, and no line runs through its lettering; and the unit sweeps draw them at the
+// sizes the built pages give them.
 
+import { readFileSync, writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 
 const BODIES = [
@@ -231,7 +233,7 @@ for (const [w, h] of [
   [1440, 900],
   [1180, 820],
 ] as const)
-  test(`turned any way at ${w}×${h}, View A stays inside its frame and off the key plan`, async ({
+  test(`turned any way at ${w}×${h}, View A stays inside its frame, off the key plan and its lettering clear`, async ({
     page,
     isMobile,
   }) => {
@@ -249,8 +251,9 @@ for (const [w, h] of [
         .toBeGreaterThan(8);
       await page.locator('#view-a').focus();
       const out: string[] = [];
-      for (let turn = 0; turn < 72; turn += 6) {
-        for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowLeft');
+      // Every 15° (three presses of 5°).
+      for (let turn = 0; turn < 72; turn += 3) {
+        for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowLeft');
         await frames(page);
         const bad = await page.evaluate(() => {
           const svg = document.getElementById('view-a')!;
@@ -271,8 +274,81 @@ for (const [w, h] of [
           }
           return outside || onPlan ? `${outside} outside, ${onPlan} on the key plan` : '';
         });
-        if (bad) out.push(`${id}${hash} turned ${(turn + 6) * 5}°: ${bad}`);
+        const at = `${id}${hash} turned ${(turn + 3) * 5}°`;
+        if (bad) out.push(`${at}: ${bad}`);
+        for (const hit of (await page.evaluate(throughLettering, '#view-a')) ?? [])
+          out.push(`${at}: ${hit}`);
       }
       expect(out).toEqual([]);
     }
   });
+
+type Sizes = {
+  touch: boolean;
+  a: { w: number; h: number; inset: { x0: number; y0: number; x1: number; y1: number } | null };
+  p: { w: number; h: number };
+};
+
+/** In the page: View A's size, the key-plan inset in its pixels, and the key plan's size, as the
+ *  views measure them. */
+function drawingSizes(): Omit<Sizes, 'touch'> {
+  type V = {
+    w: number;
+    h: number;
+    clearInset?: boolean;
+    inset?: Sizes['a']['inset'];
+    measure(): void;
+  };
+  const { a, p } = (window as unknown as { __pb: { views: { a: V; p: V } } }).__pb.views;
+  a.measure();
+  const view = { w: a.w, h: a.h, inset: a.clearInset ? a.inset! : null };
+  // A phone shows one drawing at a time: the key plan, to measure it.
+  document.querySelector('.views')!.classList.add('show-plan');
+  p.measure();
+  return { a: view, p: { w: p.w, h: p.h } };
+}
+
+// The unit sweeps (tests/unit/drawings-*.test.ts) draw both views at the sizes these windows give
+// them, kept in tests/fixtures/drawing-sizes.json: a change of layout that moves them fails here.
+// UPDATE_SIZES=1 measures them anew and writes the file.
+test("the unit sweep draws at the built pages' own sizes", async ({ browser, isMobile }, info) => {
+  test.skip(isMobile, 'each window opens its own screen');
+  const file = new URL('../fixtures/drawing-sizes.json', import.meta.url);
+  const want = JSON.parse(readFileSync(file, 'utf8')) as Record<string, Sizes>;
+  const got: Record<string, Sizes> = {};
+  for (const [name, { touch }] of Object.entries(want)) {
+    const [width, height] = name.split('x').map(Number) as [number, number];
+    const ctx = await browser.newContext({
+      baseURL: info.project.use.baseURL,
+      viewport: { width, height },
+      ...(touch ? { isMobile: true, hasTouch: true } : {}),
+    });
+    const page = await ctx.newPage();
+    await page.goto('saturn/');
+    await expect.poll(() => page.locator('#view-a path[d]:not([d=""])').count()).toBeGreaterThan(8);
+    got[name] = { touch, ...(await page.evaluate(drawingSizes)) };
+    await ctx.close();
+  }
+  if (process.env.UPDATE_SIZES) {
+    writeFileSync(file, JSON.stringify(got, null, 2) + '\n');
+    return;
+  }
+  const off: string[] = [];
+  for (const [name, s] of Object.entries(want)) {
+    const g = got[name]!;
+    const pairs: [string, number, number][] = [
+      ['View A width', g.a.w, s.a.w],
+      ['View A height', g.a.h, s.a.h],
+      ['key plan width', g.p.w, s.p.w],
+      ['key plan height', g.p.h, s.p.h],
+      ...(['x0', 'y0', 'x1', 'y1'] as const).map((k): [string, number, number] => [
+        `inset ${k}`,
+        g.a.inset?.[k] ?? 0,
+        s.a.inset?.[k] ?? 0,
+      ]),
+    ];
+    for (const [what, x, y] of pairs)
+      if (Math.abs(x - y) > 0.5) off.push(`${name}: ${what} ${x}, not ${y}`);
+  }
+  expect(off).toEqual([]);
+});
