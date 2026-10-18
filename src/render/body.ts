@@ -336,7 +336,7 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
   const li = (s: string) => `<li>${s}</li>`;
   // .pointer and .touch follow the input (body.css); what needs the script is .js-only.
   const act = '<span class="pointer">Click</span><span class="touch">Tap</span>';
-  return `<p><a href="${ctx.base}">☉ Planetary</a>: the solar system, moving. NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>
+  return `<p><a href="${ctx.base}"><span class="sun">☉</span> Planetary</a>: the solar system, moving. NASA’s Planetary Fact Sheet, drawn as a set of engineering drawings. Unofficial: not affiliated with or endorsed by NASA.</p>
       <h3>Reading this sheet</h3>
       <ul>
         <li class="js-only">${act} a row, or a line in the drawing, for NASA’s definition; what it measures turns yellow.</li>
@@ -344,7 +344,7 @@ function info(id: BodyId, sheet: Sheet, ctx: PageCtx): string {
         <li class="js-only pointer">While a definition is open, ↑ ↓<span class="steps-note"> or ‹ › above the table</span> step through the rows.</li>
         <li class="js-only">Rows marked ⊢⊣ are drawn. Drag view A to turn it; <span class="pointer">double-click</span><span class="touch">double-tap</span> to reset. Spin: 1 s = 1 h.</li>
         <li class="js-only">Tabs<span class="pointer"> and ← →</span> switch bodies and keep the selected row.</li>
-        <li>PLANETARY at the top left (☉ on a phone or a small window) returns to the solar system.</li>
+        <li>PLANETARY at the top left (<span class="sun">☉</span> on a phone or a small window) returns to the solar system.</li>
       </ul>
       <h3>General notes</h3>
       <ol class="drafting">${notes.map((n) => li(esc(n))).join('')}</ol>

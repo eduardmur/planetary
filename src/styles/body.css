@@ -71,10 +71,18 @@ html:has(.sheet-body) {
   display: block;
   overflow: visible;
 }
+/* ☉ is not in the page's font. A symbol font draws it the size of a lowercase o, where Chromium's
+   own fallback draws it smaller, between wide gaps; at a line height of 1 the symbol font's taller
+   ascent and descent leave the line's height alone. */
+.sheet-body .sun,
+.sheet-body ~ .info-dialog .sun {
+  font-family:
+    'Apple Symbols', 'Segoe UI Symbol', 'Noto Sans Symbols 2', 'Noto Sans Symbols', sans-serif;
+  line-height: 1;
+}
 .sheet-body .tabs .home .sun {
   display: none;
   font-size: 19px;
-  line-height: 1;
 }
 .sheet-body .tabs nav {
   position: relative;

@@ -345,4 +345,12 @@ describe('body pages', () => {
       'NASA’s uranringfact.html disagrees with itself on the Radius/Eq. radius column: Eta 1.834 vs 47,176 ÷ 25,559 = 1.846; Delta 1.900 vs 48,300 ÷ 25,559 = 1.890; Epsilon 2.006 vs 51,149 ÷ 25,559 = 2.001. Planetary draws the rings from the km column.',
     ]);
   });
+
+  it('sets every ☉ in a span of its own, for the symbol font: the page’s font has none', () => {
+    for (const [id, html] of pages) {
+      // The header's, and the two in the dialog.
+      expect(html.match(/☉/g), id).toHaveLength(3);
+      expect(html.match(/<span class="sun"[^>]*>☉<\/span>/g), id).toHaveLength(3);
+    }
+  });
 });
