@@ -15,7 +15,7 @@ import { PNG } from 'pngjs';
 
 const { GIFEncoder, quantize, applyPalette } = gifenc;
 const root = resolve(import.meta.dirname, '..');
-const port = 4179;
+const port = Number(process.env.MEDIA_PORT ?? 4179);
 const base = `http://localhost:${port}/planetary/`;
 const SHEETS = [
   'home',
