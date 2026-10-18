@@ -61,7 +61,7 @@ ticks with the orbital period.
 | Rings                                              | Ring fact sheets, radius column (km), never the ratio column                          |
 | Orbit shape                                        | Main table: Perihelion, Aphelion, Orbital Inclination                                 |
 | Orbit orientation, position at the epoch           | Body page: Mean Orbital Elements (J2000) and Sidereal orbit period, Kepler's equation |
-| Schedule values, ratio to Earth                    | Main table and ratio table, verbatim                                                  |
+| Table values, ratio to Earth                       | Main table and ratio table, verbatim                                                  |
 | Definitions                                        | planetfact_notes.html, planetfact_ratio_notes.html, fact_notes.html, verbatim         |
 
 Spin uses one convention end to end: the axis is the right-hand-rule pole at NASA's obliquity, and the
@@ -89,14 +89,16 @@ within 0.5° from 1990 to 2060 (0.3° for every body except Mercury); the sheets
 
 Units toggle, date picker, view buttons, tours, intro animations, sound, photos, starfield, a back
 graticule, Earth phantoms on every sheet, section views, NASA's group labels ("gas giants"), and any
-"dwarf planet" or "ice giant" vocabulary that is not on NASA's pages. Content that changes on hover,
-panels that open by pushing the page down, and a comparison table on the home page.
+"dwarf planet" or "ice giant" vocabulary that is not on NASA's pages. Content that changes on hover
+(other than the planet names on the home page), panels that open by pushing the page down, and a
+comparison table on the home page.
 
 ## Interaction
 
-Content changes only on a click, a tap, Enter or Space; hovering changes nothing but the cursor. A row
-or a drawn line selects its parameter: the geometry turns yellow and NASA's definition opens in a
-popover beside the row (a sheet at the bottom of a phone held upright). It closes with ×, Esc, a second
+On a body's sheet, content changes only on a click, a tap, Enter or Space; hovering changes only the
+cursor and a faint row wash. A row or a drawn line selects its parameter: the geometry turns yellow and
+NASA's definition opens in a popover under the row, or above it when there is more room there, within
+the table column (a sheet at the bottom of a phone held upright). It closes with ×, Esc, a second
 click or a click on blank paper. Nothing that opens pushes the layout. Drag sideways on view A to turn
 it, double-click to reset. The tabs and ← → move between bodies and keep the selected row. A pause
 button stops the motion; reduced-motion settings start paused. Deep links such as `/saturn/#obliquity`

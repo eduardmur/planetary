@@ -22,9 +22,10 @@ Uranus, Neptune and Pluto.
 
 ## Reading a sheet
 
-- Click a row of NASA's table, or a line in the drawing. What it measures turns yellow, and NASA's
-  definition opens beside the row: the value as a multiple of Earth's, any values the drawing takes
-  from the body's own fact sheet, and the places where NASA's pages disagree about it. Hovering changes
+- Click a row of NASA's table, or a line in the drawing. What it measures turns yellow, and a popover
+  opens over the table, under the row or above it (at the bottom of the screen on a phone held
+  upright). It holds NASA's definition, the value as a multiple of Earth's, any values the drawing takes
+  from the body's own fact sheet, and the places where NASA's pages disagree about it. Hovering opens
   nothing.
 - Rows marked ⊢⊣ have a shape and are drawn. The others (mass, density, temperature and so on) are
   listed exactly as NASA gives them and are not drawn.
@@ -67,8 +68,9 @@ pages are kept in `data/raw/`, with their SHA-256 hashes and the date they were 
 NASA's pages sometimes disagree with each other. For example, the main table gives Pluto's eccentricity
 as 0.244, but the perihelion and aphelion in the same table give 0.2488. The sheets do not choose
 between them: each value is shown where NASA prints it, and each line is sized by the value printed on
-it. [`data/discrepancies.md`](data/discrepancies.md) lists every case where the main table and a body
-page disagree, and each one also shows in the definition of the row it concerns.
+it. [`data/discrepancies.md`](data/discrepancies.md) lists every place where NASA's pages disagree, with
+each other or within one page: 19 conflicts and 103 differences that are only rounding. Each conflict
+also shows in the popover of the row it concerns.
 [DATA.md](DATA.md) explains the sources, the parsing rules and the schema.
 
 The tests check that:
@@ -97,7 +99,7 @@ pages change.
 There is no WebGL and no framework. A small renderer in `src/draw/` projects spheroids, rings and orbits
 with an orthographic camera, finds the hidden lines analytically and writes SVG. The lettering uses the
 single-stroke Hershey font, drawn with the same pen as the lines. Each sheet is a static HTML page with
-its schedule already in place, and the client script is about 24 kB gzipped.
+its table already in place, and the client script is about 24 kB gzipped.
 
 ## Credits and licences
 
