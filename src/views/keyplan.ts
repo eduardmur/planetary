@@ -190,9 +190,17 @@ export class KeyPlanView extends View {
       arrowhead(dl, tip, sub2(tip, sun));
       labels.line([sun, tip]);
       arrowOff(tip, sub2(tip, sun));
-      // Beyond the arrowhead, whichever way it points (edge-on, it may point left).
-      const beyond = spotsToward(tip[0] - sun[0], tip[1] - sun[1]).slice(0, 3);
-      later.push({ x: tip[0], y: tip[1], text: '♈', spots: beyond, gap: 5, mask: true });
+      // Beyond the arrowhead, whichever way it points; edge-on, where the arrow lies along the
+      // orbit, also beside it.
+      const beyond = spotsToward(tip[0] - sun[0], tip[1] - sun[1]);
+      later.push({
+        x: tip[0],
+        y: tip[1],
+        text: '♈',
+        spots: edge ? beyond : beyond.slice(0, 3),
+        gap: 5,
+        mask: true,
+      });
     }
 
     // The orbit: a path of motion (long-dash dot), north of the ecliptic and south of it alike.
@@ -321,6 +329,7 @@ export class KeyPlanView extends View {
             size: 's',
             ref,
             spots: spotsToward(at[0] - sun[0], at[1] - sun[1]),
+            reach: [2, 3],
             mask: true,
           });
       };
@@ -369,7 +378,7 @@ export class KeyPlanView extends View {
         // Sun, round the Sun as SUN is, a little further out.
         later.push(
           onSun
-            ? [12, 22, 32].map((gap) => ({ ...e, x: sun[0], y: sun[1], gap }))
+            ? [12, 22, 32, 44].map((gap) => ({ ...e, x: sun[0], y: sun[1], gap }))
             : { ...e, x: cPx[0], y: cPx[1], gap: 8, reach: [2, 3] },
         );
       }
@@ -484,9 +493,10 @@ export class KeyPlanView extends View {
       dl.dot(pp, 3.4, 'orbitalVelocity');
       dl.line(pp, tip, 'dim', 'orbitalVelocity');
       arrowhead(dl, tip, tangent, 'orbitalVelocity');
-      labels.line([pp, tip]);
+      // Labels mind the position and its arrow most: they are what the date is about.
+      labels.line([pp, tip], 2.5, 6, 2);
       arrowOff(tip, tangent);
-      markOff(pp, 4);
+      markOff(pp, 4, 4);
       date = {
         x: pp[0],
         y: pp[1],
@@ -542,7 +552,7 @@ export class KeyPlanView extends View {
       const before = labels.mark();
       const sun9 = sunReq(9);
       for (const spot of sun9.spots!)
-        labels.obstacles.push({ ...labels.boxFor(sun9, spot), w: 0.5 });
+        labels.obstacles.push({ ...labels.boxFor(sun9, spot), w: 0.5, soft: true });
       const b = labels.place(dl, date);
       labels.drop(before);
       if (edge) labels.block(grow(b, 5));

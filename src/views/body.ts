@@ -1066,7 +1066,7 @@ export class BodyView extends View {
       });
       // Other values keep a wider berth from it, so that it never reads as one with them.
       const before = labels.mark();
-      for (const b of labels.placed) labels.obstacles.push(grow(b, 6));
+      for (const b of labels.placed) labels.obstacles.push({ ...grow(b, 6), soft: true });
       labels.placeFirst(dl, [[tilt(mid)], [tilt(g.a)], [tilt(g.end)], corners(d.label, 'm')]);
       labels.drop(before);
       anchors.push(g.a, g.end);

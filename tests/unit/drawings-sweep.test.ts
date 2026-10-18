@@ -1,7 +1,7 @@
 // Every lettered value in View A and the key plan, for every body, every drawn row and the drawing
-// sizes of eight windows (1440×900, 1280×720, 1920×1080, 1366×768, 1180×820 and phones at 390×664,
-// 360×640 and 664×390): no other line may run through the lettering or come within a stroke's breadth
-// of it, unless a mask interrupts it there. Then the ring radii, the dipole, the values drawn always
+// sizes of thirteen windows (desktop from 1024×768 to 2560×1440, phones from 320×568 to an iPad held
+// upright, and phones held sideways): no other line may run through the lettering or come within a
+// stroke's breadth of it, unless a mask interrupts it there. Then the ring radii, the dipole, the values drawn always
 // and View A turned any way. The views draw in Node into a recording DrawList; letter() is wrapped so
 // that each label's strokes are known.
 
@@ -289,6 +289,17 @@ const SIZES = {
   },
   '360x640': { a: { w: 344, h: 246.59375, inset: null }, p: { w: 344, h: 236.59375 } },
   '664x390': { a: { w: 356.390625, h: 299, inset: null }, p: { w: 356.390625, h: 289 } },
+  '2560x1440': {
+    a: { w: 2172, h: 1333, inset: { x0: 1832, y0: 1037, x1: 2172, y1: 1367 } },
+    p: { w: 339, h: 287.3125 },
+  },
+  '1024x768': {
+    a: { w: 636, h: 661, inset: { x0: 407.046875, y0: 417, x1: 636, y1: 695 } },
+    p: { w: 227.953125, h: 235.3125 },
+  },
+  '320x568': { a: { w: 304, h: 214.90625, inset: null }, p: { w: 304, h: 204.53125 } },
+  '844x390': { a: { w: 455.390625, h: 299, inset: null }, p: { w: 455.390625, h: 289 } },
+  '834x1194': { a: { w: 818, h: 490.359375, inset: null }, p: { w: 818, h: 480.359375 } },
 } as const;
 type Size = keyof typeof SIZES;
 const CHECKED = Object.keys(SIZES) as Size[];
@@ -388,7 +399,7 @@ describe('ring radii', () => {
     return out;
   }
 
-  for (const size of ['1440x900', '1280x720', '390x664', '360x640', '664x390'] as Size[])
+  for (const size of CHECKED)
     for (const id of GIANTS)
       it(`${id} at ${size}: every value stands clear of the body, the lines and the other labels`, () => {
         const values = ringValues(id, size);
@@ -443,7 +454,7 @@ describe('values drawn always', () => {
 describe('View A turned', () => {
   // Any yaw at the home pitch, and any yaw in the orbit plane (where a drag leaves the view while
   // the obliquity is open): everything drawn stays in the view and off the key-plan inset.
-  for (const size of ['1440x900', '1280x720', '390x664', '1180x820'] as Size[])
+  for (const size of ['1440x900', '1280x720', '390x664', '1180x820', '1024x768'] as Size[])
     for (const id of BODY_IDS)
       it(`${id} at ${size}: stays inside the view and clear of the key plan`, () => {
         const s = SIZES[size].a;

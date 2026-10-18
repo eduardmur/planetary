@@ -20,6 +20,8 @@ export interface Box {
   y1: number;
   /** Obstacles only: how much a label minds sitting on it (default 1). */
   w?: number;
+  /** Obstacles only: a place to leave free where possible, not ink; it never calls for a mask. */
+  soft?: boolean;
 }
 
 /** A placed label's box, and what it sits on (0: nothing). */
@@ -263,14 +265,15 @@ export class LabelPlacer {
   cost(box: Box): number {
     let cost = 0;
     for (const p of this.placed) cost += overlap(grow(box, GAP), p) * 4;
-    return cost + this.onInk(box) + this.outside(box);
+    return cost + this.onInk(box, true) + this.outside(box);
   }
 
-  /** The part of cost() that lines and obstacles make: what a mask would have to hide. */
-  onInk(box: Box): number {
+  /** The part of cost() that lines and obstacles make: what a mask would have to hide (with `soft`,
+   *  also the places to leave free). */
+  onInk(box: Box, soft = false): number {
     let cost = 0;
     const ink = grow(box, 1);
-    for (const o of this.obstacles) cost += overlap(ink, o) * (o.w ?? 1);
+    for (const o of this.obstacles) if (soft || !o.soft) cost += overlap(ink, o) * (o.w ?? 1);
     for (const s of this.near(ink)) cost += bandIn(s, ink);
     return cost;
   }
@@ -295,12 +298,12 @@ export class LabelPlacer {
    */
   costTurned(cx: number, cy: number, ang: number, w: number, h: number, margin = 1.5): number {
     const box = turnedBox(cx, cy, ang, w, h, margin);
-    let cost = this.onInkTurned(cx, cy, ang, w, h, margin);
+    let cost = this.onInkTurned(cx, cy, ang, w, h, margin, true);
     for (const p of this.placed) cost += overlap(grow(box, GAP), p) * 4;
     return cost + this.outside(box);
   }
 
-  /** The part of costTurned() that lines and obstacles make. */
+  /** The part of costTurned() that lines and obstacles make (see onInk()). */
   private onInkTurned(
     cx: number,
     cy: number,
@@ -308,6 +311,7 @@ export class LabelPlacer {
     w: number,
     h: number,
     margin = 1.5,
+    soft = false,
   ): number {
     const hw = w / 2 + margin,
       hh = h / 2 + margin;
@@ -324,6 +328,7 @@ export class LabelPlacer {
     };
     let cost = 0;
     for (const o of this.obstacles) {
+      if (o.soft && !soft) continue;
       const [u, v] = local([(o.x0 + o.x1) / 2, (o.y0 + o.y1) / 2]);
       const rx = (o.x1 - o.x0) / 2,
         ry = (o.y1 - o.y0) / 2;
