@@ -25,9 +25,9 @@ const SUN_ORBITING: BodyId[] = [
 /**
  * Which rows of NASA's ring sheets are drawn, and with which line type. Line types follow NASA's
  * optical depth: opaque main rings wide, rings of optical depth around 0.01 or more narrow, fainter
- * rings phantom. Rows beyond about 2.6 planet radii would shrink the planet, and some rows would sit
- * on a drawn edge; the popover lists both (see ringList below). `why` says why a group of rows is not
- * drawn, where the reason is NASA's.
+ * rings phantom. Rows beyond about 2.6 planet radii would shrink the planet, and some rows among the
+ * drawn ones are left out; the popover names both (see ringList below). `why` gives the reason a
+ * group of rows is not drawn, printed after it.
  */
 const RING_PLAN: Partial<
   Record<
@@ -128,15 +128,15 @@ export interface RingList {
   drawn: RingEdge[];
   /** Rows beyond the outermost drawn edge: drawing them would shrink the planet. */
   beyond: string[];
-  /** The other rows that are not drawn. A group of rows is one entry, with NASA's reason if any. */
+  /** The other rows that are not drawn. A group of rows is one entry, with the plan's reason if any. */
   omitted: string[];
 }
 
 export function ringList(id: BodyId): RingList | undefined {
   const plan = RING_PLAN[id];
-  const sheet = body(id).rings;
-  if (!plan || !sheet) return undefined;
-  const edges = plannedEdges(id);
+  if (!plan) return undefined;
+  const edges = plannedEdges(id); // throws when the ring sheet or a planned row is missing
+  const sheet = body(id).rings!;
   const drawn = edges.map(({ plan: e, row, r, text }) => ({
     name: e.end ? (e.label ?? row.name) : row.name,
     r,
