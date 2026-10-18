@@ -2,7 +2,7 @@
 // frame's corners, and everything else (notes, sources, data) behind "?".
 
 import { BODY_SHEETS, SHEET_COUNT, type Sheet } from '../content/sheets.ts';
-import { FACTS } from '../data/index.ts';
+import { DISCREPANCIES, FACTS } from '../data/index.ts';
 import { orreryModel, type OrreryModel } from '../data/orrery.ts';
 import { MIN_SYMBOL, RADIAL_POWER } from '../views/orrery.ts';
 import {
@@ -46,7 +46,7 @@ function about(sheet: Sheet, ctx: PageCtx, m: OrreryModel): string {
         <li>Retrieved <span class="nowrap">${FACTS.retrieved.slice(0, 10)}</span></li>
       </ul>
       <h3>Data and code</h3>
-      <p>${link(`${ctx.base}data/factsheet.json`, 'factsheet.json')} · ${link(`${ctx.base}data/factsheet-main.csv`, 'factsheet-main.csv')} · ${link(`${ctx.repo}/blob/main/data/discrepancies.md`, 'Where NASA’s pages disagree ↗')} · ${link(ctx.repo, 'Source code ↗')}</p>
+      <p>${link(`${ctx.base}data/factsheet.json`, 'factsheet.json')} · ${link(`${ctx.base}data/factsheet-main.csv`, 'factsheet-main.csv')} · ${link(`${ctx.repo}/blob/main/data/discrepancies.md`, `Where NASA’s pages disagree (${DISCREPANCIES.length}) ↗`)} · ${link(ctx.repo, 'Source code ↗')}</p>
       <p class="label">${sheet.dwg} · SHEET ${sheet.number} / ${SHEET_COUNT} · ${esc(sheet.title.toUpperCase())} · ${esc(sheet.docType)} · ISSUED <span class="nowrap">${ctx.issued}</span></p>`;
 }
 

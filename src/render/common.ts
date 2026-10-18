@@ -21,7 +21,6 @@ export interface PageData {
   /** Body pages. */
   body?: ReturnType<typeof bodyModel>;
   plan?: ReturnType<typeof keyPlanModel>;
-  defs?: Record<string, { term: string; text: string; src: string }>;
   /** The home page. */
   orrery?: OrreryModel;
 }
