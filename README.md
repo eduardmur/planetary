@@ -27,6 +27,8 @@ Uranus, Neptune and Pluto.
   upright). It holds NASA's definition, the value as a multiple of Earth's, any values the drawing takes
   from the body's own fact sheet, and the places where NASA's pages disagree about it. Hovering opens
   nothing.
+- While a definition is open, ‹ › step to the previous or next row: above the table, or in the
+  popover itself on a phone. ↑ and ↓ do the same.
 - Rows marked ⊢⊣ have a shape and are drawn. The others (mass, density, temperature and so on) are
   listed exactly as NASA gives them and are not drawn.
 - View A shows the body from 20° above its orbit plane. Drag it sideways to turn it. Selecting the
