@@ -116,11 +116,6 @@ export function spreadAlong(
   return out;
 }
 
-export function textBox(text: string, size: TextSize = 'm'): { w: number; h: number } {
-  const h = CAP[size];
-  return { w: measure(text) * h, h: h * 1.35 };
-}
-
 const SPOTS: Spot[] = ['r', 'tr', 'br', 'l', 'tl', 'bl', 't', 'b'];
 
 /** Clear space kept between two labels, px: above and below each other, and side by side, where
@@ -136,6 +131,17 @@ const CELL = 24;
 export const MASK = 2.5;
 /** How much more a label minds a mark, an outline or another label than other ink. */
 const HARD = 100;
+
+/** The box of a label's lettering: one line, or several (split at '\n') one under another, the
+ *  clear space kept between two labels apart. */
+export function textBox(text: string, size: TextSize = 'm'): { w: number; h: number } {
+  const h = CAP[size];
+  const lines = text.split('\n');
+  return {
+    w: Math.max(...lines.map((l) => measure(l))) * h,
+    h: h * 1.35 + (lines.length - 1) * (h + GAP),
+  };
+}
 
 const grow = (b: Box, d: number, dx = d): Box => ({
   x0: b.x0 - dx,
@@ -521,13 +527,6 @@ export class LabelPlacer {
     return this.commit(dl, this.pick(reqs));
   }
 
-  /** Like placeAny(), for a label that may be left out: only at a fit place (see unfit()), else
-   *  nowhere (null). */
-  placeFit(dl: DrawList, reqs: LabelReq[]): Placed | null {
-    const c = this.pick(reqs);
-    return c.bad ? null : this.commit(dl, c);
-  }
-
   /** Whether placeAny() would find a fit place for a label (see unfit()): the first one will do. */
   fits(reqs: LabelReq[]): boolean {
     return this.recall(() => {
@@ -623,7 +622,11 @@ export class LabelPlacer {
       // Other labels may come close to a leader, but not within a stroke's reach (°) of it.
       this.line(c.leader, 1.5);
     }
-    letter(dl, c.r.text, c.box.x0, (c.box.y0 + c.box.y1) / 2, { size, valign: 'middle', ref });
+    const h = CAP[size];
+    c.r.text.split('\n').forEach((line, i) => {
+      const y = c.box.y0 + (h * 1.35) / 2 + i * (h + GAP);
+      letter(dl, line, c.box.x0, y, { size, valign: 'middle', ref });
+    });
     return { ...c.box, cost: c.cost };
   }
 

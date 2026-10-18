@@ -592,6 +592,8 @@ export class BodyView extends View {
     labels.line([pB, q2]);
     arrowOff(labels, q1, sub2(q1, q2));
     arrowOff(labels, q2, sub2(q2, q1));
+    // The ring radii start from a dot at the centre, which no label drawn always may hide.
+    if (m.rings) markOff(labels, c0, 2);
 
     // Values drawn always: the diameter, the obliquity, the positive pole and the rotation period.
     // What is drawn on demand keeps them clear of its lines and marks in every state, so that no
@@ -627,21 +629,24 @@ export class BodyView extends View {
       polarAt?.at,
     );
     const t4 = labels.mark();
-    // The positive pole's sign by the axis's arrowhead first, for it has nowhere else to go; then
-    // the obliquity at the middle of its arc, else beyond either end of it, else further out on a
-    // leader.
-    labels.place(dl, {
+    // The positive pole's sign by the axis's arrowhead first, for it has nowhere else to go (a little
+    // further off where none of its places is fit); then the obliquity at the middle of its arc,
+    // else beyond either end of it, else further out on a leader. The obliquity and the rotation
+    // period stand further off still where none of their places is fit (a small drawing turned so
+    // that the axis points at the reader).
+    const plus = (gap: number): LabelReq => ({
       x: pos[0],
       y: pos[1],
       text: '+',
       ref: 'obliquity',
       spots: away(pos),
-      gap: 5,
+      gap,
       mask: true,
     });
+    labels.placeFirst(dl, [[plus(5)], [plus(9), plus(13)]]);
     const oblAt = this.px([Math.sin(eps / 2) * L.rArc, 0, Math.cos(eps / 2) * L.rArc]);
     const oblText = `${m.obliquityText}°`;
-    labels.placeAny(
+    labels.placeFurther(
       dl,
       [
         { x: oblAt[0], y: oblAt[1], text: oblText, spots: away(oblAt), reach: [2, 3, 4, 5] },
@@ -661,7 +666,7 @@ export class BodyView extends View {
     const mid = (spinBox.x0 + spinBox.x1) / 2;
     const outward: Spot[] = right ? ['r', 'tr', 'br'] : ['l', 'tl', 'bl'];
     const inward: Spot[] = right ? ['l', 'tl', 'bl'] : ['r', 'tr', 'br'];
-    labels.placeAny(
+    labels.placeFurther(
       dl,
       [
         { x: right ? spinBox.x1 : spinBox.x0, y: hubPx[1], spots: outward },
@@ -807,7 +812,6 @@ export class BodyView extends View {
     const far = tips[tips.length - 1]!;
     dl.line(o, far, 'dim', 'ringSystem');
     dl.dot(o, 2, 'ringSystem');
-    markOff(labels, o, 2);
     for (const p of tips) {
       arrowhead(dl, p, sub2(p, o), 'ringSystem', RING_ARROW);
       arrowOff(labels, p, sub2(p, o), RING_ARROW);
@@ -955,9 +959,10 @@ export class BodyView extends View {
         );
       });
       marks.push(bbox([o], 2));
-      // Nor may the paper round a label lettered before.
+      // Nor may the paper round a label lettered before; and the radius keeps a stroke's breadth
+      // off its lettering, as its leaders do.
       for (const pl of labels.placed) {
-        clash += segIn(o, far, pl) * 40;
+        clash += segIn(o, far, grow(pl, 2)) * 40;
         for (const mk of marks) if (overlapArea(grow(pl, MASK), mk) > 0) clash += 1e4;
       }
       boxes.forEach((bx, i) => {
@@ -971,7 +976,7 @@ export class BodyView extends View {
         boxes.forEach((other, j) => {
           clash += (segIn(p, knee, other) + (j !== i ? segIn(base, p, other) : 0)) * 40;
         });
-        for (const pl of labels.placed) clash += segIn(p, knee, pl) * 40;
+        for (const pl of labels.placed) clash += segIn(p, knee, grow(pl, 2)) * 40;
       });
       return { edges, named, tips, boxes, left, clash, lead } satisfies Plan;
     };
@@ -994,9 +999,9 @@ export class BodyView extends View {
       return best!;
     };
     // Named values where the drawing is large enough to name them, then the radii alone, then the
-    // innermost and the outermost edge alone: the first that crosses nothing, else the first whose
-    // lines give way under a little of it only (a twentieth of its values' area), else the one that
-    // crosses least.
+    // innermost and the outermost edge alone: every edge, named or not, where that crosses nothing;
+    // else the first whose lines give way under a little of it only (a twentieth of its values'
+    // area); else the one that crosses least.
     const tries: [RingEdge[], boolean][] = [
       ...(this.k >= SMALL ? [[all, true] as [RingEdge[], boolean]] : []),
       [all, false],
@@ -1011,6 +1016,7 @@ export class BodyView extends View {
     }
     const area = (p: Plan) => p.boxes.reduce((s, bx) => s + (bx.x1 - bx.x0) * (bx.y1 - bx.y0), 0);
     const best =
+      plans.find((p) => p.clash === 0 && p.edges === all) ??
       plans.find((p) => p.clash <= 0.05 * area(p)) ??
       plans.reduce((a, b) => (better(b, a) ? b : a));
     // Where a value still stands on a line, the line gives way under it.
@@ -1292,7 +1298,7 @@ export class BodyView extends View {
     const anchors = [this.px(scale(axis, -1.32))];
     let first: Box | null = null;
     if (!g) {
-      first = labels.placeAny(dl, [
+      first = labels.placeFurther(dl, [
         ...at([this.px(scale(axis, -1.1)), ...anchors], d.label, 'm', [2, 3]),
         ...at(around, d.label, 'm'),
         ...this.corners(d.label, 'm', ref),
@@ -1303,20 +1309,20 @@ export class BodyView extends View {
       anchors.push(g.a, g.end);
     }
     if (d.note) {
-      // Under (or over) the dipole's own note when there is one, so the two read as one. A drawing
-      // with no room for it leaves it to the popover, which gives it too.
-      const stack = first
-        ? [
-            { x: (first.x0 + first.x1) / 2, y: first.y1, spots: ['b' as const] },
-            { x: (first.x0 + first.x1) / 2, y: first.y0, spots: ['t' as const] },
-          ].map((r) => ({ ...r, text: d.note!, size: 's' as const, ref, gap: 6, mask: true }))
-        : [];
-      labels.placeFit(dl, [
-        ...stack,
-        ...at(anchors, d.note, 's', [2, 3]),
-        ...at(around, d.note, 's'),
-        ...this.corners(d.note, 's', ref),
-      ]);
+      // Under (or over) the dipole's own note when there is one, so the two read as one; in two
+      // lines where it fits nowhere in one (a narrow drawing), wherever is least in the way then.
+      const places = (text: string) => [
+        ...(first
+          ? [
+              { x: (first.x0 + first.x1) / 2, y: first.y1, spots: ['b' as const] },
+              { x: (first.x0 + first.x1) / 2, y: first.y0, spots: ['t' as const] },
+            ].map((r) => ({ ...r, text, size: 's' as const, ref, gap: 6, mask: true }))
+          : []),
+        ...at(anchors, text, 's', [2, 3]),
+        ...at(around, text, 's'),
+        ...this.corners(text, 's', ref),
+      ];
+      labels.placeFirst(dl, [places(d.note), places(d.note.replace(' · ', '\n'))]);
     }
   }
 }
