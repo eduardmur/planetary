@@ -107,7 +107,8 @@ interface FactSheet {
   bodies: Record<BodyId, BodySheet>; // bulk, orbital, observational, elements, pole,
   //                                    magnetosphere, atmosphere, composition, rings,
   //                                    satellites (Mars, Pluto), footnotes
-  definitions: Definitions; // NASA's notes pages, verbatim (terms keyed by row, plus unkeyed ones)
+  definitions: Definitions; // NASA's notes pages, verbatim (terms keyed by row, plus unkeyed ones),
+  //                           and each page's URL and "Last Updated" date (definitions.pages)
 }
 ```
 
